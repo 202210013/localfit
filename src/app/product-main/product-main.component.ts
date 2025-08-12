@@ -19,7 +19,7 @@ export class ProductsMainComponent implements OnInit {
   products: Product[] | undefined;
   allProducts: Product[] | undefined;
   productForm: FormGroup = new FormGroup({});
-  baseUrl: string = 'https://images.localfit.store/';
+  baseUrl: string = 'http://localhost/E-comms/ecomm/e-comm/e-comm-images/';
   updateMode = false;
   updateForm: FormGroup = new FormGroup({});
   selectedProductId: number | null = null;
