@@ -113,7 +113,7 @@ class ProductService
         $stmt->execute();
 
         $products_arr = ["records" => []];
-        $base_url = 'http://localhost/E-comms/ecomm/e-comm/e-comm-images/';
+        $base_url = 'http://localhost/localfit/e-comm-images/';
     
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             $row['image'] = $base_url . $row['image'];
@@ -139,7 +139,7 @@ class ProductService
 //     $stmt->execute();
 
 //     $products_arr = ["records" => []];
-//     $base_url = 'http://localhost/E-comms/ecomm/e-comm/e-comm-images/';
+//     $base_url = 'http://localhost/localfit/e-comm-images/';
 //     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
 //         $row['image'] = $base_url . $row['image'];
 //         $products_arr["records"][] = $row;

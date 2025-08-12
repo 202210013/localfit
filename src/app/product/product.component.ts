@@ -19,7 +19,7 @@ export class ProductComponent implements OnInit {
     products: Product[] | undefined;
     allProducts: Product[] | undefined;
     productForm: FormGroup = new FormGroup({});
-    baseUrl: string = 'http://localhost/E-comms/ecomm/e-comm/e-comm-images/';
+    baseUrl: string = 'http://localhost/localfit/e-comm-images/';
     updateMode = false;
     updateForm: FormGroup = new FormGroup({});
     selectedProductId: number | null = null;
