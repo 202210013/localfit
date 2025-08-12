@@ -192,7 +192,7 @@ import { Router } from '@angular/router';
 export class ProductService {
     // Use only one base URL
     // private apiUrl = 'https://api.localfit.store/ecomm_api/Router.php?request=';
-    private apiUrl = 'http://localhost/E-comms/ecomm/e-comm/ecomm_api/Router.php?request=';
+    private apiUrl = 'http://localhost/locafit/ecomm_api/Router.php?request=';
 
     constructor(private http: HttpClient, private authService: AuthService, private router: Router) { }
 
