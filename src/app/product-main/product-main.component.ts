@@ -97,9 +97,9 @@ export class ProductsMainComponent implements OnInit {
   //   return this.baseUrl + image;
   // }
 
-  getImageUrl(image: string): string {
-  return 'https://images.localfit.store/' + image;
-}
+ getImageUrl(image: string): string {
+    return this.baseUrl + image;
+  }
 
   filterByCategory(category: string) {
     this.selectedCategory = category;
