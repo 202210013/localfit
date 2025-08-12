@@ -1,0 +1,200 @@
+<div class="product-container">
+    <div class="product-container-laptop">
+
+        
+        <div class="header-flex styled-header">
+            <div class="header-left">
+                <span class="brand-logo">LOCALFIT</span>
+                <i class="fa-solid fa-clipboard header-icon"></i>
+            </div>
+            <div class="header-right">
+                <button class="icon-mid" (click)="goToMessege()">
+                    <i class="fa-solid fa-envelope"></i>
+                </button>
+                <button class="icon-mid" (click)="goToProductListing()">
+                    <i class="fa-solid fa-shop"></i>
+                </button>
+                <button class="icon-mid" (click)="goToCart()">
+                    <i class="fa-solid fa-cart-shopping"></i>
+                    <span class="cart-l" *ngIf="carts?.length">{{ carts?.length }}</span>
+                </button>
+                <button class="icon-mid" (click)="logout()">
+                    <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                </button>
+            </div>
+        </div>
+        <hr>
+
+        <div class="flexer">
+            <div class="container-tn-plus" data-bs-toggle="modal" data-bs-target="#createProd">
+                <button class="add-icon" data-bs-toggle="modal" data-bs-target="#createProd"><i
+                        class="fa-solid fa-plus add-prod"></i></button>
+            </div>
+            <div class="flex-pr-container" *ngFor="let product of products">
+                <div class="container-tn">
+                    <img [src]="getImageUrl(product.image)" (click)="openModal(product)" class="product-image"
+                        alt="image">
+                    <div class="hr"></div>
+                    <div class="pr-details">
+                        <div class="pr-name">
+                            <p>{{ product.name }}</p>
+                        </div>
+                        <div class="pr-price">
+                            <p>₱ {{ product.price }}</p>
+                        </div>
+
+                    </div>
+                    <div class="middle-tn-btn">
+                        <div class="add-to-cart">
+                            <button class="icon" (click)="toggleUpdateMode(product)" data-bs-toggle="modal"
+                                data-bs-target="#editProd"><i class="fa-solid fa-pen-to-square"></i></button>
+                            <button class="icon" (click)="deleteProduct(product.id)">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="container-tn-prod">
+                    <p>{{ product.description }}</p>
+                </div>
+            </div>
+        </div>
+
+
+    </div>
+</div>
+
+<!-- Image Modal -->
+<div class="modal1" [ngClass]="{'show': isModalOpen}">
+    <span class="close" (click)="closeModal()">&times;</span>
+    <img class="modal-content image-modal" [src]="selectedProduct ? getImageUrl(selectedProduct.image) : ''">
+</div>
+
+<!-- image-modal.component.html -->
+<!-- <div class="image-modal-container">
+    <h2>Image Modal</h2>
+    <p>Here, we use CSS to create a modal (dialog box) that is hidden by default.</p>
+    <p>We use Angular to trigger the modal and to display the current image inside the modal when it is clicked on.</p>
+    <img [src]="imageUrl" alt="Northern Lights, Norway" width="300" height="200" (click)="openModal()"> -->
+
+
+<!-- </div> -->
+
+
+<!-- createProd -->
+<div class="modal fade" id="createProd" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="exampleModalLabel">Add Item</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form [formGroup]="productForm" (ngSubmit)="createProduct()">
+                <div class="modal-body">
+
+                    <label>Product Name:</label>
+                    <input formControlName="name" type="text">
+                    <br>
+                    <label>Product Price:</label>
+                    <input formControlName="price" type="number">
+                    <br>
+                    <label>Product Description:</label>
+                    <textarea formControlName="description"></textarea>
+                    <br>
+                    <label>Product Image:</label>
+                    <input type="file" (change)="onFileChange($event)">
+                    <br>
+
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" type="submit" data-bs-dismiss="modal">Upload</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- editProd -->
+<div class="modal fade" id="editProd" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            
+            <form [formGroup]="updateForm" (ngSubmit)="updateProduct()">
+                <div class="modal-body">
+
+
+                    <label>Product Name:</label>
+                    <input formControlName="name" type="text">
+                    <br>
+                    <label>Product Price:</label>
+                    <input formControlName="price" type="number">
+                    <br>
+                    <label>Product Description:</label>
+                    <textarea formControlName="description"></textarea>
+                    <br>
+                    <label>Product Image:</label>
+                    <input type="file" (change)="onFileChange($event)">
+                    <br>
+
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" type="submit" data-bs-dismiss="modal">Update</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+
+<!-- goToCart -->
+<div class="modal fade" id="goToCart" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="exampleModalLabel">Modal title</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Your modal content here -->
+            </div>
+           
+        </div>
+    </div>
+</div>
+
+<!-- deleteProd -->
+<div class="modal fade" id="deleteProd" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            
+            <div class="modal-body">
+                <!-- Your modal content here -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" *ngIf="selectedProduct"
+                    (click)="deleteProduct(selectedProduct.id)" data-bs-dismiss="modal">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- logout -->
+<div class="modal fade" id="logout" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="exampleModalLabel">Modal title</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Your modal content here -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" (click)="logout()" data-bs-dismiss="modal">Logout</button>
+            </div>
+        </div>
+    </div>
+</div>

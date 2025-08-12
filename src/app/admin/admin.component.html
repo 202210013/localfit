@@ -1,0 +1,51 @@
+<h2>Admin Order Approval</h2>
+<div style="display: flex; justify-content: flex-end; gap: 12px; margin-bottom: 18px;">
+  <button (click)="exportToExcel()">
+    Export to Excel
+  </button>
+  <button class="logout-btn" (click)="logout()">
+    Logout
+  </button>
+</div>
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th>Order #</th>
+        <th>Customer</th>
+        <th>Product</th>
+        <th>Quantity</th>
+        <th>Status</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let order of orders">
+        <td data-label="Order #">{{ order.id }}</td>
+        <td data-label="Customer">{{ order.customer }}</td>
+        <td data-label="Product">{{ order.product }}</td>
+        <td data-label="Quantity">{{ order.quantity }}</td>
+        <td data-label="Status">
+          <span [ngClass]="{'approved': order.status === 'approved'}">
+            {{ order.status | titlecase }}
+          </span>
+        </td>
+        <td data-label="Action">
+          <button 
+            *ngIf="order.status === 'pending'" 
+            (click)="approveOrder(order)">
+            Approve
+          </button>
+          <button 
+            *ngIf="order.status === 'pending'" 
+            (click)="declineOrder(order)" 
+            style="margin-left: 6px; background: #cc0000; color: #fff;">
+            Decline
+          </button>
+          <span *ngIf="order.status === 'approved'" class="approved">Approved</span>
+          <span *ngIf="order.status === 'declined'" class="declined">Declined</span>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>

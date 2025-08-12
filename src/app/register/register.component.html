@@ -1,0 +1,63 @@
+<div class="position-relative">
+    <div class="area">
+        <ul class="circles">
+            <li></li>
+            <li></li>
+            <li></li>
+            <li></li>
+            <li></li>
+            <li></li>
+            <li></li>
+            <li></li>
+            <li></li>
+            <li></li>
+        </ul>
+    </div>
+    
+    <div class="product-container">
+    <div class="bubbles">
+        <div class="bubble"></div>
+        <div class="bubble"></div>
+        <div class="bubble"></div>
+        <div class="bubble"></div>
+        <div class="bubble"></div>
+        <div class="bubble"></div>
+        <div class="bubble"></div>
+        <div class="bubble"></div>
+        <div class="bubble"></div>
+        <div class="bubble"></div>
+    </div>
+    <div class="product-container-laptop">
+        <!-- ...rest of your content... -->
+    </div>
+</div>
+
+    <div class="form-container">
+
+        <div class="board-form-inner2">
+
+            <form class="sticky" [formGroup]="registerForm" (ngSubmit)="register()">
+                <div class="header">
+                    <h2 class="black">Register</h2>
+                    <hr class="white">
+                </div>
+                <div>
+                    <label for="name">Name</label>
+                    <input id="name" formControlName="name" type="text">
+                </div>
+                <div>
+                    <label for="email">Email</label>
+                    <input id="email" formControlName="email" type="email">
+                </div>
+                <div>
+                    <label for="password">Password</label>
+                    <input id="password" formControlName="password" type="password">
+                </div>
+                <hr>
+                <button type="submit">Register</button>
+                <button class="submit1" (click)="goToLogin()">Sign in?</button>
+            </form>
+        </div>
+    </div>
+
+</div>

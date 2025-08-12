@@ -1,0 +1,196 @@
+<div class="product-container">
+    <div class="product-container-laptop">
+
+        <!-- Updated Header -->
+        <div class="header-flex styled-header">
+            <div class="header-left">
+                <span class="brand-logo">LOCALFIT</span>
+                <i class="fa-solid fa-clipboard header-icon"></i>
+            </div>
+            <div class="header-center">
+                <div class="search-bar">
+                    <input
+                        type="text"
+                        placeholder="Search..."
+                        class="search-input"
+                        [(ngModel)]="searchTerm"
+                        (input)="onSearch()"
+                    />
+                </div>
+            </div>
+            <div class="header-right">
+                <button class="icon-mid" (click)="goToProduct()">
+                    <i class="fa-solid fa-square-plus"></i>
+                    <span>Products ({{ allProducts?.length || 0 }})</span>
+                </button>
+                <button class="icon-mid" (click)="goToCart()">
+                    <i class="fa-solid fa-cart-shopping"></i>
+                    <span>Cart ({{ carts?.length || 0 }})</span>
+                </button>
+                <button class="icon-mid" (click)="goToMessege()">
+                    <i class="fa-solid fa-envelope"></i>
+                    <span>Messages ({{ unreadMessages || 0 }})</span>
+                </button>
+                <button class="icon-mid" (click)="logout()">
+                    <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                    <span>Logout</span>
+                </button>
+            </div>
+        </div>
+        <hr>
+
+        <div class="ad-banner-grid desktop-only">
+  <div class="ad-banner-large">
+    <img
+      *ngFor="let img of largeAdImages; let i = index"
+      [src]="img"
+      [class.active]="i === currentAdIndex"
+      [class.inactive]="i !== currentAdIndex"
+      alt="Ad"
+    />
+  </div>
+  <div class="ad-banner-small-top">
+    <img src="https://images.unsplash.com/photo-1515378791036-0648a3ef77b2?auto=format&fit=crop&w=800&q=80" alt="Ad 2">
+  </div>
+  <div class="ad-banner-small-bottom">
+    <img src="https://images.unsplash.com/photo-1512436991641-6745cdb1723f?auto=format&fit=crop&w=800&q=80" alt="Ad 3">
+  </div>
+</div>
+
+        <div class="noCart" *ngIf="allProducts && allProducts.length == 0">
+            <h2 class="color-1">No product listed. Start add product!</h2>
+            <button class="icon-mid" (click)="goToProduct()">
+                <i class="fa-solid fa-square-plus"></i>
+                <span>Add Products</span>
+            </button>
+        </div>
+
+        <div *ngIf="filteredProducts && filteredProducts.length > 0">
+
+
+            <div class="flexer">
+                <div *ngFor="let product of filteredProducts" class="product-card-wrapper" style="display:inline-block; vertical-align:top; position:relative;">
+                    <div class="container-tn">
+                        <img [src]="getImageUrl(product.image)" class="product-image" alt="image">
+
+                        <!-- Description and Add button row, shown on hover -->
+                        <div class="desc-add-row">
+                            <div class="desc-popup stack-btns">
+                                <button class="icon" (click)="openModal(product)">
+                                    <i class="fa-solid fa-eye"></i>
+                                    <h6>View</h6>
+                                </button>
+                                <button class="add-btn" (click)="addProductToCart(product.id, 1)">
+                                    <i class="fa-solid fa-cart-plus"></i>
+                                    <span>Add</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="hr">
+                        </div>
+
+                        <div class="pr-details">
+                            <div class="pr-name">
+                                <h5>{{ product.name }}</h5>
+                                <small class="product-author">
+                                    by <b>{{ getProductAuthor(product) }}</b>
+                                </small>
+
+                            </div>
+                            <!-- <p>{{ product.description }}</p> -->
+                            <div class="pr-details">
+                                <div class="pr-price">
+                                    <p>₱ {{ product.price }}</p>
+                                </div>
+                                
+
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+</div>
+
+<!-- Image Modal -->
+<div class="modal1" [ngClass]="{'show': isModalOpen}">
+    <button class="close-icon" (click)="closeModal()">
+        <i class="fa-solid fa-close"></i>
+    </button>
+    <div class="modal1-body">
+        <div class="full-info">
+            <img class="product-image-modal" [src]="selectedProduct ? getImageUrl(selectedProduct.image) : ''">
+            <div class="modal1-info">
+                <h2>{{ selectedProduct?.name }}</h2>
+                <pre class="modal1-desc">{{ selectedProduct?.description }}</pre>
+                <!-- Size selection -->
+                <div class="modal1-group" style="margin-bottom: 16px;">
+                    <label for="sizeSelect"><b>Select Size:</b></label>
+                    <select id="sizeSelect" [(ngModel)]="selectedSize" class="form-select" style="margin-left: 10px;">
+                        <option *ngFor="let size of sizes" [value]="size">{{ size }}</option>
+                    </select>
+                </div>
+                <div class="modal1-group">
+                    <h2>₱ {{ selectedProduct?.price }}</h2>
+                    <button class="modal1-icon"
+                        (click)="selectedProduct && addProductToCart(selectedProduct.id, 1, selectedSize); closeModal()">
+                        Add to Cart
+                        <i class="fa-solid fa-cart-plus"> </i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- addToCart -->
+<div class="modal fade" id="addToCart" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="n-modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 class="modal-title" id="exampleModalLabel">ADD TO CART</h2>
+                    <button class="close-icon-1" (click)="closeModal()" type="button" data-bs-dismiss="modal"
+                        aria-label="Close">
+                        <i class="fa-solid fa-close"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <!-- Your modal content here -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="del-btn" *ngIf="selectedProduct"
+                        (click)="addProductToCart(selectedProduct.id, 1)" data-bs-dismiss="modal">Add</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- logout -->
+<div class="modal fade" id="logout" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="n-modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 class="modal-title" id="exampleModalLabel">LOGOUT</h2>
+                    <button class="close-icon-1" (click)="closeModal()" type="button" data-bs-dismiss="modal"
+                        aria-label="Close">
+                        <i class="fa-solid fa-close"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="del-btn" (click)="logout()" data-bs-dismiss="modal">Logout</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

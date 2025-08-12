@@ -1,0 +1,67 @@
+<div class="chat-wrapper">
+  <!-- Hamburger button for mobile view -->
+  <button class="hamburger" (click)="sidebarOpen = !sidebarOpen" *ngIf="isMobile">
+    &#9776;
+  </button>
+
+  <!-- Sidebar with users -->
+  <div class="sidebar" [class.open]="sidebarOpen || !isMobile">
+    <div class="sidebar-header">
+      <img src="logo.png" alt="Logo" class="logo" />
+    </div>
+    <div class="sidebar-search">
+      <input
+        type="text"
+        [(ngModel)]="searchTerm"
+        placeholder="Search users..."
+        class="search-input"
+      />
+    </div>
+    <ul class="user-list">
+      <li
+        *ngFor="let user of filteredUsers()"
+        [class.active]="user.email === selectedRecipient?.email"
+        (click)="selectRecipient(user)"
+        tabindex="0"
+        role="button"
+      >
+        <span class="user-name">{{ user.name }}</span>
+        <span class="user-email">({{ user.email }})</span>
+      </li>
+    </ul>
+    <!-- Back button at the bottom -->
+    <button class="back-btn sidebar-bottom-btn" (click)="goToProductListing()">&#8592; Back to Homepage</button>
+  </div>
+
+  <!-- Chat area -->
+  <div class="chat-area">
+    <div class="messages">
+      <div
+        *ngFor="let message of filteredMessages()"
+        [ngClass]="{
+          bubble: true,
+          sent: message.sender === userName,
+          received: message.sender !== userName
+        }"
+      >
+        {{ message.content }}
+      </div>
+    </div>
+    <form [formGroup]="messageForm" (ngSubmit)="sendMessage()" class="chat-input-form">
+      <input
+        formControlName="content"
+        type="text"
+        placeholder="Type your message..."
+        class="chat-input"
+        [disabled]="!selectedRecipient"
+      />
+      <button
+        type="submit"
+        [disabled]="messageForm.invalid || !selectedRecipient"
+        class="send-btn"
+      >
+        <span>&#9993;</span>
+      </button>
+    </form>
+  </div>
+</div>

@@ -1,0 +1,151 @@
+<div class="product-container">
+    <div class="bubbles">
+        <div class="bubble"></div>
+        <div class="bubble"></div>
+        <div class="bubble"></div>
+        <div class="bubble"></div>
+        <div class="bubble"></div>
+        <div class="bubble"></div>
+        <div class="bubble"></div>
+        <div class="bubble"></div>
+        <div class="bubble"></div>
+        <div class="bubble"></div>
+    </div>
+    <div class="product-container-laptop">
+
+        <div class="header-flex styled-header">
+            <div class="header-left">
+                <span class="brand-logo">LOCALFIT</span>
+                <i class="fa-solid fa-clipboard header-icon"></i>
+            </div>
+            <div class="header-right">
+                <button class="icon-mid" (click)="goToLogin()">
+                    <i class="fa-solid fa-right-to-bracket"></i>
+                    Login
+                </button>
+                <button class="icon-mid" (click)="goToRegister()">
+                    <i class="fa-solid fa-user-plus"></i>
+                    Register
+                </button>
+            </div>
+        </div>
+
+
+        <hr>
+
+
+        <hr class="none">
+
+     
+
+        <div *ngIf="filteredProducts && filteredProducts.length > 0; else noProducts">
+
+
+            <div class="flexer">
+                <div class="container-tn" *ngFor="let product of filteredProducts">
+
+
+                    <img [src]="getImageUrl(product.image)" class="product-image" alt="image">
+
+                    <div class="hr">
+                    </div>
+
+                    <div class="pr-details">
+                        <div class="pr-name">
+                            <h5>{{ product.name }}</h5>
+                        </div>
+                        <!-- <p>{{ product.description }}</p> -->
+                        <div class="pr-details">
+                            <div class="pr-price">
+                                <p>₱ {{ product.price }}</p>
+                            </div>
+                           
+
+                        </div>
+                    </div>
+
+                    <!-- <div class="middle-tn-bg">
+                    </div> -->
+
+                    <div class="middle-tn-btn">
+                        <div class="add-to-cart">
+                            <button class="icon" (click)="openModal(product)">
+                                <h5>...</h5>
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+        <ng-template #noProducts>
+            <p>No products found.</p>
+        </ng-template>
+
+    </div>
+</div>
+
+<!-- Image Modal -->
+<div class="modal1" [ngClass]="{'show': isModalOpen}">
+    <button class="close-icon" (click)="closeModal()">
+        <i class="fa-solid fa-close"></i>
+    </button>
+    <div class="modal1-body">
+        <div class="full-info">
+
+            <img class="product-image-modal" [src]="selectedProduct ? getImageUrl(selectedProduct.image) : ''">
+            <div class="modal1-info">
+                <h2>{{ selectedProduct?.name }}</h2>
+                <pre class="modal1-desc">{{ selectedProduct?.description }}</pre>
+                <div class="modal1-group">
+                    <h2>₱ {{ selectedProduct?.price }}</h2>
+                    
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<!-- image-modal.component.html -->
+<!-- <div class="image-modal-container">
+    <h2>Image Modal</h2>
+    <p>Here, we use CSS to create a modal (dialog box) that is hidden by default.</p>
+    <p>We use Angular to trigger the modal and to display the current image inside the modal when it is clicked on.</p>
+    <img [src]="imageUrl" alt="Northern Lights, Norway" width="300" height="200" (click)="openModal()"> -->
+
+
+<!-- </div> -->
+
+<!-- addToCart -->
+<div class="modal fade" id="addToCart" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="n-modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 class="modal-title" id="exampleModalLabel">ADD TO CART?</h2>
+                    <button class="close-icon-1" (click)="closeModal()" type="button" data-bs-dismiss="modal"
+                        aria-label="Close">
+                        <i class="fa-solid fa-close"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <!-- Your modal content here -->
+                    Login First.
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="del-btn" (click)="goToLogin()" data-bs-dismiss="modal">Go to
+                        Login</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<button
+  *ngIf="deferredPrompt"
+  class="install-pwa-btn"
+  (click)="installPWA()"
+>
+  <i class="fa-brands fa-google-play"></i> Install App
+</button>
