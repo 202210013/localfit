@@ -1,214 +1,488 @@
-/* Container for the login form */
-.position-relative {
+/* Modern Register Container */
+.modern-register-container {
+    min-height: 100vh;
     width: 100%;
-    height: 100vh;
-    background: rgb(255, 255, 255);
-    background: linear-gradient(170deg, #780001, #f5f5f5, #e0e0e0);
+    position: relative;
+    background: linear-gradient(135deg, 
+        rgba(16, 185, 129, 0.1) 0%,
+        rgba(139, 92, 246, 0.1) 25%,
+        rgba(59, 130, 246, 0.1) 50%,
+        rgba(245, 158, 11, 0.1) 75%,
+        rgba(239, 68, 68, 0.1) 100%);
     display: flex;
-    justify-content: center;
     align-items: center;
+    justify-content: center;
+    padding: 20px;
     overflow: hidden;
 }
 
-/* Circles background effect */
-.area {
+/* Animated Background */
+.animated-bg {
     position: absolute;
-    width: 100%;
-    height: 100%;
     top: 0;
     left: 0;
-    overflow: hidden;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(-45deg, 
+        rgba(16, 185, 129, 0.05),
+        rgba(139, 92, 246, 0.05),
+        rgba(59, 130, 246, 0.05),
+        rgba(245, 158, 11, 0.05));
+    background-size: 400% 400%;
+    animation: gradientShift 15s ease infinite;
 }
 
-.circles {
+@keyframes gradientShift {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+/* Background Floating Shapes */
+.background-shapes {
     position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
     height: 100%;
-    list-style: none;
-    padding: 0;
-    margin: 0;
+    overflow: hidden;
+    z-index: 1;
 }
 
-.circles li {
+.floating-shape {
     position: absolute;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.2);
-    animation: move 25s linear infinite;
+    opacity: 0.1;
+    animation: floatShape 20s infinite linear;
 }
 
-.circles li:nth-child(1) {
-    width: 200px;
-    height: 200px;
-    top: 20%;
-    left: 10%;
-    animation-duration: 22s;
-}
-
-.circles li:nth-child(2) {
-    width: 300px;
-    height: 300px;
-    top: 70%;
-    left: 20%;
-    animation-duration: 30s;
-}
-
-.circles li:nth-child(3) {
-    width: 150px;
-    height: 150px;
-    top: 30%;
-    left: 80%;
+.shape-1 {
+    width: 180px;
+    height: 180px;
+    background: linear-gradient(45deg, #10b981, #3b82f6);
+    top: 15%;
+    left: -90px;
     animation-duration: 28s;
 }
 
-.circles li:nth-child(4) {
-    width: 250px;
-    height: 250px;
-    top: 50%;
-    left: 60%;
-    animation-duration: 35s;
-}
-
-.circles li:nth-child(5) {
-    width: 350px;
-    height: 350px;
-    top: 10%;
-    left: 50%;
-    animation-duration: 40s;
-}
-
-.circles li:nth-child(6) {
-    width: 180px;
-    height: 180px;
-    top: 80%;
-    left: 30%;
-    animation-duration: 32s;
-}
-
-.circles li:nth-child(7) {
+.shape-2 {
     width: 220px;
     height: 220px;
-    top: 40%;
-    left: 20%;
-    animation-duration: 27s;
-}
-
-.circles li:nth-child(8) {
-    width: 280px;
-    height: 280px;
-    top: 60%;
-    left: 70%;
-    animation-duration: 45s;
-}
-
-.circles li:nth-child(9) {
-    width: 190px;
-    height: 190px;
-    top: 20%;
-    left: 80%;
-    animation-duration: 33s;
-}
-
-.circles li:nth-child(10) {
-    width: 240px;
-    height: 240px;
+    background: linear-gradient(45deg, #8b5cf6, #10b981);
     top: 70%;
-    left: 40%;
-    animation-duration: 37s;
+    right: -110px;
+    animation-duration: 32s;
+    animation-delay: -8s;
 }
 
-@keyframes move {
-    0% {
-        transform: translateY(0);
-    }
-    100% {
-        transform: translateY(-1000px);
-    }
+.shape-3 {
+    width: 140px;
+    height: 140px;
+    background: linear-gradient(45deg, #f59e0b, #ef4444);
+    bottom: 15%;
+    left: 15%;
+    animation-duration: 24s;
+    animation-delay: -12s;
 }
 
-/* Form container styling */
-.form-container {
+.shape-4 {
+    width: 200px;
+    height: 200px;
+    background: linear-gradient(45deg, #3b82f6, #8b5cf6);
+    top: 25%;
+    right: 20%;
+    animation-duration: 36s;
+    animation-delay: -18s;
+}
+
+.shape-5 {
+    width: 160px;
+    height: 160px;
+    background: linear-gradient(45deg, #ef4444, #f59e0b);
+    bottom: 5%;
+    left: -80px;
+    animation-duration: 30s;
+    animation-delay: -6s;
+}
+
+@keyframes floatShape {
+    0% { transform: translateY(0px) rotate(0deg); }
+    25% { transform: translateY(-30px) rotate(90deg); }
+    50% { transform: translateY(0px) rotate(180deg); }
+    75% { transform: translateY(-15px) rotate(270deg); }
+    100% { transform: translateY(0px) rotate(360deg); }
+}
+
+/* Register Card */
+.register-card-container {
     position: relative;
-    background-color: #fff;
-    padding: 20px;
-    border-radius: 10px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-    width: 400px;
-    max-width: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center; /* Center align form elements */
-}
-
-/* Form header styling */
-.header {
-    text-align: center;
-    margin-bottom: 20px;
-}
-
-.header h2.black {
-    color: #021f3a;
-}
-
-.header hr.white {
-    border: 0;
-    height: 1px;
-    background: #cc0000; 
-    margin: 10px 0;
-}
-
-/* Form element styling */
-form {
-    display: flex;
-    flex-direction: column;
+    z-index: 10;
     width: 100%;
-    padding: 0; /* Remove extra padding */
+    max-width: 460px;
 }
 
-form label {
-    margin-bottom: 5px;
-    font-weight: bold;
-    padding: 0; /* Remove extra padding */
+.register-card {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 24px;
+    padding: 40px;
+    box-shadow: 
+        0 20px 40px rgba(0, 0, 0, 0.1),
+        0 8px 16px rgba(0, 0, 0, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    animation: cardFloat 6s ease-in-out infinite;
 }
 
-form input {
-    margin-bottom: 15px;
-    padding: 10px; /* Adjust padding to ensure text is not too close to the edges */
-    border: 1px solid #ff3333;
-    border-radius: 5px;
+@keyframes cardFloat {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-8px); }
+}
+
+/* Register Header */
+.register-header {
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.brand-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 20px;
+    background: linear-gradient(135deg, #10b981, #3b82f6);
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    color: white;
+    box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3);
+}
+
+.register-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: #1f2937;
+    margin: 0 0 8px 0;
+    background: linear-gradient(135deg, #1f2937, #10b981);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.register-subtitle {
+    color: #6b7280;
+    margin: 0;
+    font-size: 16px;
+}
+/* Form Styling */
+.register-form {
+    width: 100%;
+}
+
+.form-group {
+    margin-bottom: 24px;
+}
+
+.input-container {
+    position: relative;
+}
+
+.form-input {
+    width: 100%;
+    padding: 16px 16px 16px 48px;
+    border: 2px solid rgba(229, 231, 235, 0.8);
+    border-radius: 12px;
+    font-size: 16px;
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(10px);
+    transition: all 0.3s ease;
+    box-sizing: border-box;
+}
+
+.form-input::placeholder {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.form-input:focus::placeholder {
+    opacity: 0.5;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: #10b981;
+    background: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.1);
+}
+
+.form-input:focus + .form-label,
+.form-input:not(:placeholder-shown) + .form-label,
+.form-input:valid + .form-label {
+    color: #10b981;
+    transform: translateY(-32px) translateX(-12px) scale(0.85);
+    background: rgba(255, 255, 255, 0.95);
+}
+
+.form-input:not(:focus):not(:placeholder-shown) + .form-label,
+.form-input:not(:focus):valid + .form-label {
+    color: #6b7280;
+}
+
+.form-label {
+    position: absolute;
+    top: 16px;
+    left: 48px;
+    color: #9ca3af;
+    font-size: 16px;
+    pointer-events: none;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    background: rgba(255, 255, 255, 0.9);
+    padding: 4px 8px;
+    border-radius: 6px;
+    backdrop-filter: blur(10px);
+    z-index: 5;
+}
+
+.input-icon {
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #9ca3af;
+    font-size: 18px;
+    transition: color 0.3s ease;
+    z-index: 10;
+}
+
+.form-input:focus ~ .input-icon {
+    color: #10b981;
+}
+
+/* Enhanced Password Strength Indicator */
+.password-strength-container {
+    margin-top: 12px;
+}
+
+.password-strength-bar {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.strength-segment {
+    height: 4px;
+    flex: 1;
+    border-radius: 2px;
+    background: #e5e7eb;
+    transition: all 0.3s ease;
+}
+
+.strength-segment.active.very-weak {
+    background: linear-gradient(90deg, #ef4444, #f87171);
+}
+
+.strength-segment.active.weak {
+    background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+
+.strength-segment.active.fair {
+    background: linear-gradient(90deg, #eab308, #facc15);
+}
+
+.strength-segment.active.good {
+    background: linear-gradient(90deg, #22c55e, #4ade80);
+}
+
+.strength-segment.active.strong {
+    background: linear-gradient(90deg, #16a34a, #22c55e);
+}
+
+.password-strength-text {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: rgba(243, 244, 246, 0.8);
+}
+
+.password-strength-text.very-weak-text {
+    color: #dc2626;
+    background: rgba(254, 242, 242, 0.8);
+}
+
+.password-strength-text.weak-text {
+    color: #d97706;
+    background: rgba(255, 251, 235, 0.8);
+}
+
+.password-strength-text.fair-text {
+    color: #ca8a04;
+    background: rgba(254, 249, 195, 0.8);
+}
+
+.password-strength-text.good-text {
+    color: #16a34a;
+    background: rgba(240, 253, 244, 0.8);
+}
+
+.password-strength-text.strong-text {
+    color: #15803d;
+    background: rgba(240, 253, 244, 0.8);
+}
+
+/* Terms Container */
+.terms-container {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 16px;
+    padding: 0;
+    background: transparent;
+    border: none;
+}
+
+/* Checkbox Styling */
+.terms-container .checkbox {
+    width: 16px;
+    height: 16px;
+    accent-color: #780001;
+    cursor: pointer;
+    margin: 2px 0 0 0;
+    flex-shrink: 0;
+    border-radius: 3px;
+}
+
+/* Terms Label */
+.terms-container .terms-label {
+    color: #6b7280;
+    font-size: 13px;
+    line-height: 1.4;
+    cursor: pointer;
+    margin: 0;
+    flex: 1;
+}
+
+.terms-link {
+    color: #10b981;
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.3s ease;
+}
+
+.terms-link:hover {
+    color: #059669;
+    text-decoration: underline;
+}
+
+/* Buttons */
+.register-btn {
+    width: 100%;
+    padding: 16px 24px;
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    margin-bottom: 24px;
+}
+
+.register-btn:hover {
+    background: linear-gradient(135deg, #059669, #047857);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(16, 185, 129, 0.4);
+}
+
+.register-btn:active {
+    transform: translateY(0);
+}
+
+/* Divider */
+.divider {
+    text-align: center;
+    margin: 24px 0;
+    position: relative;
+    color: #9ca3af;
     font-size: 14px;
-    text-align: left; /* Ensure text is aligned to the left */
-    cursor: text; /* Keep text cursor when hovering over input fields */
-    width: 100%; /* Full width to fit the form container */
-    box-sizing: border-box; /* Include padding and border in the element's total width and height */
 }
 
-form button[type="submit"] {
-    background-color: #cc0000; 
-    color: white;
-    border: none;
-    padding: 10px;
-    border-radius: 5px;
-    cursor: pointer;
+.divider::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(to right, transparent, #e5e7eb, transparent);
+}
+
+.divider span {
+    background: rgba(255, 255, 255, 0.95);
+    padding: 0 16px;
+    position: relative;
+    z-index: 10;
+}
+
+/* Login Button */
+.login-btn {
+    width: 100%;
+    padding: 16px 24px;
+    background: rgba(255, 255, 255, 0.8);
+    color: #374151;
+    border: 2px solid rgba(229, 231, 235, 0.8);
+    border-radius: 12px;
     font-size: 16px;
-    margin-bottom: 10px;
-}
-
-form button[type="submit"]:hover {
-    background-color: #990000;
-}
-
-form .submit1 {
-    background-color: #cc0000; 
-    color: white;
-    border: none;
-    padding: 10px;
-    border-radius: 5px;
+    font-weight: 600;
     cursor: pointer;
-    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
 }
 
-form .submit1:hover {
-    background-color: #990000;
+.login-btn:hover {
+    background: rgba(249, 250, 251, 0.95);
+    border-color: #10b981;
+    color: #10b981;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+}
+
+/* Responsive Design */
+@media (max-width: 480px) {
+    .modern-register-container {
+        padding: 16px;
+    }
+    
+    .register-card {
+        padding: 24px;
+    }
+    
+    .register-title {
+        font-size: 24px;
+    }
+    
+    .terms-container {
+        flex-direction: column;
+        gap: 12px;
+    }
+    
+    .checkbox {
+        margin-top: 0;
+    }
 }
 
 
@@ -321,4 +595,109 @@ body{
     bottom:1080px;
     transform:translateX(-200px);
   }
+}
+
+/* Password Strength Indicator Styles */
+.password-strength-container {
+    margin-top: 8px;
+    margin-bottom: 10px;
+}
+
+.password-strength-bar {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 5px;
+    height: 6px;
+}
+
+.strength-segment {
+    flex: 1;
+    height: 100%;
+    background-color: #e0e0e0;
+    border-radius: 3px;
+    transition: background-color 0.3s ease;
+}
+
+.strength-segment.active.very-weak {
+    background-color: #ff4444;
+}
+
+.strength-segment.active.weak {
+    background-color: #ff8800;
+}
+
+.strength-segment.active.fair {
+    background-color: #ffbb00;
+}
+
+.strength-segment.active.good {
+    background-color: #88cc00;
+}
+
+.strength-segment.active.strong {
+    background-color: #00cc44;
+}
+
+.password-strength-text {
+    font-size: 12px;
+    font-weight: bold;
+    text-align: left;
+    margin-top: 4px;
+}
+
+.very-weak-text {
+    color: #ff4444;
+}
+
+.weak-text {
+    color: #ff8800;
+}
+
+.fair-text {
+    color: #ffbb00;
+}
+
+.good-text {
+    color: #88cc00;
+}
+
+.strong-text {
+    color: #00cc44;
+}
+
+/* Password Toggle Button */
+.password-toggle {
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #9ca3af;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.3s ease;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+}
+
+.password-toggle:hover {
+    color: #3b82f6;
+    background: rgba(59, 130, 246, 0.1);
+}
+
+.password-toggle:focus {
+    outline: none;
+    color: #3b82f6;
+    background: rgba(59, 130, 246, 0.15);
+}
+
+.password-toggle:active {
+    transform: translateY(-50%) scale(0.95);
 }

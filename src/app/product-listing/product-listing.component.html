@@ -1,43 +1,116 @@
 <div class="product-container">
     <div class="product-container-laptop">
 
-        <!-- Updated Header -->
-        <div class="header-flex styled-header">
-            <div class="header-left">
-                <span class="brand-logo">LOCALFIT</span>
-                <i class="fa-solid fa-clipboard header-icon"></i>
+        <!-- Modern Header -->
+        <div class="modern-header">
+            <div class="header-brand">
+                <div class="brand-container">
+                    <i class="fa-solid fa-store brand-icon"></i>
+                    <span class="brand-text">LOCALFIT</span>
+                </div>
             </div>
-            <div class="header-center">
-                <div class="search-bar">
+            
+            <div class="header-search">
+                <div class="search-container">
+                    <i class="fa-solid fa-magnifying-glass search-icon"></i>
                     <input
                         type="text"
-                        placeholder="Search..."
-                        class="search-input"
+                        placeholder="Search products..."
+                        class="modern-search-input"
                         [(ngModel)]="searchTerm"
                         (input)="onSearch()"
                     />
                 </div>
             </div>
-            <div class="header-right">
-                <button class="icon-mid" (click)="goToProduct()">
-                    <i class="fa-solid fa-square-plus"></i>
-                    <span>Products ({{ allProducts?.length || 0 }})</span>
+            
+            <div class="header-actions">
+                <button class="modern-nav-btn" (click)="goToOrders()" title="Orders">
+                    <i class="fa-solid fa-clipboard-list"></i>
+                    <span class="nav-text">Orders</span>
                 </button>
-                <button class="icon-mid" (click)="goToCart()">
-                    <i class="fa-solid fa-cart-shopping"></i>
-                    <span>Cart ({{ carts?.length || 0 }})</span>
+                
+                <button class="modern-nav-btn" (click)="goToCart()" title="Shopping Cart">
+                    <i class="fa-solid fa-shopping-cart"></i>
+                    <span class="nav-text">Cart</span>
+                    <span class="nav-badge" *ngIf="carts && carts.length > 0">{{ carts.length }}</span>
                 </button>
-                <button class="icon-mid" (click)="goToMessege()">
+                
+                <button class="modern-nav-btn" (click)="goToMessege()" title="Messages">
                     <i class="fa-solid fa-envelope"></i>
-                    <span>Messages ({{ unreadMessages || 0 }})</span>
+                    <span class="nav-text">Messages</span>
+                    <span class="nav-badge notification" *ngIf="unreadMessages > 0">{{ unreadMessages }}</span>
                 </button>
-                <button class="icon-mid" (click)="logout()">
-                    <i class="fa-solid fa-arrow-right-from-bracket"></i>
-                    <span>Logout</span>
+                
+                <button class="modern-nav-btn logout-btn" (click)="logout()" title="Logout">
+                    <i class="fa-solid fa-sign-out-alt"></i>
+                    <span class="nav-text">Logout</span>
                 </button>
             </div>
         </div>
-        <hr>
+
+        <!-- Enhanced Modern Welcome Section -->
+        <div class="enhanced-welcome">
+            <div class="welcome-background">
+                <div class="floating-shapes">
+                    <div class="shape shape-1"></div>
+                    <div class="shape shape-2"></div>
+                    <div class="shape shape-3"></div>
+                    <div class="shape shape-4"></div>
+                </div>
+            </div>
+            
+            <div class="welcome-container">
+                <div class="welcome-main">
+                    <div class="welcome-avatar">
+                        <div class="avatar-circle">
+                            <i class="fa-solid fa-user"></i>
+                        </div>
+                        <div class="status-indicator"></div>
+                    </div>
+                    
+                    <div class="welcome-message">
+                        <div class="greeting-line">
+                            <span class="greeting-text">Welcome back,</span>
+                            <div class="time-badge">
+                                <i class="fa-solid fa-clock"></i>
+                                <span>Today</span>
+                            </div>
+                        </div>
+                        <h1 class="user-name-display">{{ getProductAuthor({}) }}</h1>
+                        <p class="welcome-description">Ready to manage your store and discover amazing products</p>
+                    </div>
+                </div>
+                
+                <div class="welcome-dashboard">
+                    <div class="dashboard-card primary-card" (click)="scrollToProducts()" title="View Your Products">
+                        <div class="card-icon">
+                            <i class="fa-solid fa-box"></i>
+                        </div>
+                        <div class="card-info">
+                            <div class="card-number">{{ filteredProducts?.length || 0 }}</div>
+                            <div class="card-label">Products</div>
+                        </div>
+                        <div class="card-trend positive">
+                            <i class="fa-solid fa-arrow-up"></i>
+                        </div>
+                    </div>
+
+                    
+                    <div class="dashboard-card accent-card" (click)="goToCart()" title="View Shopping Cart">
+                        <div class="card-icon">
+                            <i class="fa-solid fa-shopping-cart"></i>
+                        </div>
+                        <div class="card-info">
+                            <div class="card-number">{{ carts?.length || 0 }}</div>
+                            <div class="card-label">In Cart</div>
+                        </div>
+                        <div class="card-trend positive">
+                            <i class="fa-solid fa-arrow-up"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <div class="ad-banner-grid desktop-only">
   <div class="ad-banner-large">
@@ -57,62 +130,47 @@
   </div>
 </div>
 
-        <div class="noCart" *ngIf="allProducts && allProducts.length == 0">
-            <h2 class="color-1">No product listed. Start add product!</h2>
-            <button class="icon-mid" (click)="goToProduct()">
-                <i class="fa-solid fa-square-plus"></i>
-                <span>Add Products</span>
-            </button>
+        <div class="empty-state" *ngIf="allProducts && allProducts.length == 0">
+            <div class="empty-content">
+                <i class="fa-solid fa-box-open empty-icon"></i>
+                <h2 class="empty-title">No products listed yet</h2>
+                <p class="empty-subtitle">Start building your store by adding your first product</p>
+                <button class="modern-cta-btn" (click)="goToProduct()">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>Add Your First Product</span>
+                </button>
+            </div>
         </div>
 
-        <div *ngIf="filteredProducts && filteredProducts.length > 0">
-
-
-            <div class="flexer">
-                <div *ngFor="let product of filteredProducts" class="product-card-wrapper" style="display:inline-block; vertical-align:top; position:relative;">
-                    <div class="container-tn">
-                        <img [src]="getImageUrl(product.image)" class="product-image" alt="image">
-
-                        <!-- Description and Add button row, shown on hover -->
-                        <div class="desc-add-row">
-                            <div class="desc-popup stack-btns">
-                                <button class="icon" (click)="openModal(product)">
+        <div *ngIf="filteredProducts && filteredProducts.length > 0" id="products-section">
+            <div class="products-grid">
+                <div *ngFor="let product of filteredProducts" class="modern-product-card">
+                    <div class="card-image-wrapper">
+                        <img [src]="getImageUrl(product.image)" class="card-image" alt="{{product.name}}">
+                        <div class="card-overlay">
+                            <div class="card-actions">
+                                <button class="action-btn view-btn" (click)="openModal(product)" title="Quick View">
                                     <i class="fa-solid fa-eye"></i>
-                                    <h6>View</h6>
                                 </button>
-                                <button class="add-btn" (click)="addProductToCart(product.id, 1)">
+                                <button class="action-btn add-btn" (click)="openModal(product)" title="Add to Cart">
                                     <i class="fa-solid fa-cart-plus"></i>
-                                    <span>Add</span>
                                 </button>
                             </div>
                         </div>
-
-                        <div class="hr">
+                    </div>
+                    
+                    <div class="card-content">
+                        <div class="product-info">
+                            <h3 class="product-title">{{ product.name }}</h3>
+                            <p class="product-author">by <span>{{ getProductAuthor(product) }}</span></p>
                         </div>
-
-                        <div class="pr-details">
-                            <div class="pr-name">
-                                <h5>{{ product.name }}</h5>
-                                <small class="product-author">
-                                    by <b>{{ getProductAuthor(product) }}</b>
-                                </small>
-
-                            </div>
-                            <!-- <p>{{ product.description }}</p> -->
-                            <div class="pr-details">
-                                <div class="pr-price">
-                                    <p>₱ {{ product.price }}</p>
-                                </div>
-                                
-
-                            </div>
+                        <div class="product-price">
+                            <span class="price-label">₱</span>
+                            <span class="price-value">{{ product.price }}</span>
                         </div>
-
                     </div>
                 </div>
-
             </div>
-
         </div>
 
     </div>
@@ -133,13 +191,17 @@
                 <div class="modal1-group" style="margin-bottom: 16px;">
                     <label for="sizeSelect"><b>Select Size:</b></label>
                     <select id="sizeSelect" [(ngModel)]="selectedSize" class="form-select" style="margin-left: 10px;">
+                        <option value="" disabled>Choose size</option>
                         <option *ngFor="let size of sizes" [value]="size">{{ size }}</option>
                     </select>
+                    <small *ngIf="!selectedSize" style="color: red; margin-left: 10px;">Size is required</small>
                 </div>
                 <div class="modal1-group">
                     <h2>₱ {{ selectedProduct?.price }}</h2>
                     <button class="modal1-icon"
-                        (click)="selectedProduct && addProductToCart(selectedProduct.id, 1, selectedSize); closeModal()">
+                        [disabled]="!selectedSize"
+                        [class.disabled]="!selectedSize"
+                        (click)="selectedProduct && selectedSize && addProductToCart(selectedProduct.id, 1, selectedSize); closeModal()">
                         Add to Cart
                         <i class="fa-solid fa-cart-plus"> </i>
                     </button>

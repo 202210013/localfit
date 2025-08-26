@@ -2,15 +2,15 @@
 date_default_timezone_set("Asia/Manila");
 set_time_limit(1000);
 
-define("SERVER", "localhost");
-define("DATABASE", "e-comm");
-define("USER", "root");
-define("PASSWORD", "");
+// define("SERVER", "localhost");
+// define("DATABASE", "e-comm");
+// define("USER", "root");
+// define("PASSWORD", "");
 
-// define("SERVER", "auth-db609.hstgr.io");
-// define("DATABASE", "u538949235_e_comm");
-// define("USER", "u538949235_e_comm");
-// define("PASSWORD", "E-comm1225");
+define("SERVER", "auth-db479.hstgr.io");
+define("DATABASE", "u838148329_e_comm");
+define("USER", "u838148329_e_comm");
+define("PASSWORD", "E-comm1225");
 define("DRIVER", "mysql");
 
 class Connection

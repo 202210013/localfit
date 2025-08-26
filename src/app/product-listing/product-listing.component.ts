@@ -20,7 +20,7 @@ export class AllProductsComponent implements OnInit {
   products: Product[] | undefined;
   allProducts: Product[] | undefined;
   productForm: FormGroup = new FormGroup({});
-  baseUrl: string = 'http://localhost/localfit/e-comm-images/';
+  baseUrl: string = 'https://images.localfit.store/';
   updateMode = false;
   updateForm: FormGroup = new FormGroup({});
   selectedProductId: number | null = null;
@@ -53,17 +53,19 @@ export class AllProductsComponent implements OnInit {
 
   openModal(product: Product) {
     this.selectedProduct = product;
+    this.selectedSize = ''; // Reset size selection when opening modal
     this.isModalOpen = true;
   }
 
   selectProduct(product: Product) {
     this.selectedProduct = product;
+    this.selectedSize = ''; // Reset size selection when selecting product
   }
-
 
   closeModal() {
     this.isModalOpen = false;
     this.selectedProduct = undefined;
+    this.selectedSize = ''; // Reset size selection when closing modal
   }
 
 
@@ -105,6 +107,20 @@ export class AllProductsComponent implements OnInit {
 
   goToProduct() {
     this.router.navigate(['/product']);
+  }
+  goToOrders() {
+    this.router.navigate(['/orders']);
+  }
+
+  scrollToProducts() {
+    const element = document.getElementById('products-section');
+    if (element) {
+      element.scrollIntoView({ 
+        behavior: 'smooth',
+        block: 'start',
+        inline: 'nearest'
+      });
+    }
   }
 
 logout() {
@@ -258,11 +274,25 @@ logout() {
   }
 
   sizes: string[] = ['S', 'M', 'L', 'XL']; // Add your available sizes here
-  selectedSize: string = 'M'; // Default size
+  selectedSize: string = ''; // No default size - force user to select
 
-  addProductToCart(productId: number, quantity: number, size: string = 'M'): void {
-    // Remove size check if Cart does not support size
-    const existingCartItem = this.carts?.find(cart => cart.product_id === productId);
+  addProductToCart(productId: number, quantity: number, size: string = ''): void {
+    // Validate that size is selected
+    if (!size || size.trim() === '') {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Size Required!',
+        text: 'Please select a size before adding to cart.',
+        timer: 2000,
+        showConfirmButton: false
+      });
+      return;
+    }
+
+    // Check if same product with same size already exists in cart
+    const existingCartItem = this.carts?.find(cart => 
+      cart.product_id === productId && cart.size === size
+    );
 
     if (existingCartItem) {
       existingCartItem.quantity += quantity;
@@ -270,25 +300,24 @@ logout() {
       Swal.fire({
         icon: 'success',
         title: 'Cart Updated!',
-        text: 'Product quantity updated in your cart.',
+        text: `Product quantity updated in your cart (Size: ${size}).`,
         timer: 1200,
         showConfirmButton: false
       });
     } else {
-      // Only pass productId and quantity if your service does not support size
-      this.productService.createCart(productId, quantity).subscribe((response: any) => {
+      // Pass productId, quantity, and size to the service
+      this.productService.createCart(productId, quantity, size).subscribe((response: any) => {
         this.getCarts();
         Swal.fire({
           icon: 'success',
           title: 'Added to Cart!',
-          text: 'Product successfully added to your cart.',
+          text: `Product added to your cart (Size: ${size}).`,
           timer: 1200,
           showConfirmButton: false
         });
       });
     }
-}
-
+  }
 
   updateCart(cart: Cart): void {
     this.productService.updateCart(cart.id, cart).subscribe((response: any) => {
@@ -336,12 +365,38 @@ logout() {
 
   // Add a method to fetch products posted by the current user
   getUserPostedProducts(): void {
-    this.productService.getUserPostedProducts().subscribe((response: any) => {
-        this.userPostedProducts = response.records || []; // Assuming the API returns only the user's products
+    this.productService.getUserPostedProducts().subscribe({
+      next: (response: any) => {
+        console.log('User posted products response:', response);
+        // Handle different response structures
+        if (response && response.records) {
+          this.userPostedProducts = response.records;
+        } else if (response && Array.isArray(response)) {
+          this.userPostedProducts = response;
+        } else if (response && response.data) {
+          this.userPostedProducts = response.data;
+        } else {
+          this.userPostedProducts = [];
+        }
+        console.log('User posted products count:', this.userPostedProducts.length);
+      },
+      error: (error) => {
+        console.error('Error fetching user posted products:', error);
+        this.userPostedProducts = [];
+      }
     });
-}
+  }
 
 getProductAuthor(product: any): string {
+  // If no product is passed (empty object), return current user's name for welcome banner
+  if (!product || Object.keys(product).length === 0) {
+    return localStorage.getItem('user_name') || 
+           localStorage.getItem('username') || 
+           localStorage.getItem('user_email')?.split('@')[0] || 
+           'User';
+  }
+  
+  // For actual products, return the product's seller/author
   return product.seller_name || product.user_name || 'No Name';
 }
 

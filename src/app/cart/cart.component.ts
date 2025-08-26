@@ -19,7 +19,7 @@ export class CartComponent implements OnInit {
   products: Product[] | undefined;
   allProducts: Product[] | undefined;
   productForm: FormGroup = new FormGroup({});
-  baseUrl: string = 'http://localhost/localfit/e-comm-images/';
+  baseUrl: string = 'https://images.localfit.store/';
   
 
   updateMode = false;
@@ -173,8 +173,14 @@ export class CartComponent implements OnInit {
       customer: localStorage.getItem('user_email') || 'guest',
       product: cart.name,
       quantity: cart.quantity,
+      size: cart.size || 'M', // Include size information
       status: 'pending'
     }));
+
+    console.log('=== CHECKOUT DEBUG ===');
+    console.log('Selected carts:', this.selectedCarts);
+    console.log('Orders being sent:', orders);
+    console.log('Cart sizes:', this.selectedCarts.map(cart => ({ name: cart.name, size: cart.size })));
 
     // Send orders to backend
     this.productService.createOrders(orders).subscribe(

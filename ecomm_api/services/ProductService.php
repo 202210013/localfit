@@ -18,15 +18,22 @@ class ProductService
 
     public function createProduct()
     {
+        // Add error logging for debugging
+        error_log("CREATE PRODUCT - Starting creation process");
+        error_log("POST data: " . print_r($_POST, true));
+        error_log("FILES data: " . print_r($_FILES, true));
+
         // Verify the token before creating the task
         $userService = new UserService($this->conn);
         $tokenValidation = json_decode($userService->validateToken($this->token), true);
         if (!$tokenValidation['valid']) {
+            error_log("CREATE PRODUCT - Invalid token");
             http_response_code(401);
             return json_encode(["error" => "Invalid token."]);
         }
 
         if (!isset($_FILES['image'])) {
+            error_log("CREATE PRODUCT - No image uploaded");
             http_response_code(400);
             return json_encode(["error" => "No image uploaded"]);
         }
@@ -37,8 +44,16 @@ class ProductService
         }
 
         if (!isset($data['name']) || !isset($data['price']) || !isset($data['description'])) {
+            error_log("CREATE PRODUCT - Missing required fields: " . print_r($data, true));
             http_response_code(400);
-            return json_encode(["error" => "Null Data"]);
+            return json_encode(["error" => "Missing required fields: name, price, or description"]);
+        }
+
+        // Validate price is numeric
+        if (!is_numeric($data['price']) || $data['price'] <= 0) {
+            error_log("CREATE PRODUCT - Invalid price: " . $data['price']);
+            http_response_code(400);
+            return json_encode(["error" => "Price must be a positive number"]);
         }
 
         $name = $data['name'];
@@ -47,52 +62,86 @@ class ProductService
         $category = isset($data['category']) ? $data['category'] : '';
 
         $image = $_FILES['image'];
+        error_log("CREATE PRODUCT - Image error code: " . $image['error']);
+        error_log("CREATE PRODUCT - Image size: " . $image['size']);
+        error_log("CREATE PRODUCT - Image type: " . $image['type']);
+
         if ($image['error'] === 0) {
             if (in_array($image['type'], ["image/jpeg", "image/png", "image/gif"])) {
-                if ($image['size'] <= 100000000) { // 100 MB
+                // Fix: Make size limit consistent (50MB = 50000000 bytes)
+                if ($image['size'] <= 50000000) { // 50 MB
                     $dateFolder = date('Y-m-d');
                     $uploadPath = $this->upload_dir . $dateFolder;
-                    if (!is_dir($uploadPath)) {
-                        mkdir($uploadPath, 0777, true);
+                    
+                    // Check if upload directory exists and is writable
+                    if (!is_dir($this->upload_dir)) {
+                        error_log("CREATE PRODUCT - Upload directory doesn't exist: " . $this->upload_dir);
+                        http_response_code(500);
+                        return json_encode(["error" => "Upload directory not configured"]);
                     }
+
+                    if (!is_dir($uploadPath)) {
+                        if (!mkdir($uploadPath, 0777, true)) {
+                            error_log("CREATE PRODUCT - Failed to create upload path: " . $uploadPath);
+                            http_response_code(500);
+                            return json_encode(["error" => "Failed to create upload directory"]);
+                        }
+                    }
+
                     $uniqueName = uniqid() . '_' . basename($image['name']);
                     $imagePath = $uploadPath . '/' . $uniqueName;
+                    
+                    error_log("CREATE PRODUCT - Attempting to move file to: " . $imagePath);
+                    
                     if (!move_uploaded_file($image['tmp_name'], $imagePath)) {
+                        error_log("CREATE PRODUCT - Failed to move uploaded file");
                         http_response_code(500);
                         return json_encode(["error" => "Failed to upload image"]);
                     }
                     $image_name_only = $dateFolder . '/' . $uniqueName;
+                    error_log("CREATE PRODUCT - Image uploaded successfully: " . $image_name_only);
                 } else {
+                    error_log("CREATE PRODUCT - Image size exceeds limit: " . $image['size']);
                     http_response_code(400);
                     return json_encode(["error" => "Image size exceeds 50 MB"]);
                 }
             } else {
+                error_log("CREATE PRODUCT - Invalid image type: " . $image['type']);
                 http_response_code(400);
-                return json_encode(["error" => "Invalid image type"]);
+                return json_encode(["error" => "Invalid image type. Only JPEG, PNG, and GIF are allowed."]);
             }
         } else {
+            error_log("CREATE PRODUCT - Image upload error: " . $image['error']);
             http_response_code(400);
-            return json_encode(["error" => "Image upload failed"]);
+            return json_encode(["error" => "Image upload failed with error code: " . $image['error']]);
         }
 
         // Insert into database
-        $query = "INSERT INTO " . $this->table_name . " 
-        SET name=:name, price=:price, description=:description, image=:image, category=:category, user_id=:user_id";
-        $stmt = $this->conn->prepare($query);
+        try {
+            $query = "INSERT INTO " . $this->table_name . " 
+            SET name=:name, price=:price, description=:description, image=:image, category=:category, user_id=:user_id";
+            $stmt = $this->conn->prepare($query);
 
-        $stmt->bindParam(":name", $name);
-        $stmt->bindParam(":price", $price);
-        $stmt->bindParam(":description", $description);
-        $stmt->bindParam(":category", $category);
-        $stmt->bindParam(":image", $image_name_only);
-        $stmt->bindParam(":user_id", $this->userId);
+            $stmt->bindParam(":name", $name);
+            $stmt->bindParam(":price", $price);
+            $stmt->bindParam(":description", $description);
+            $stmt->bindParam(":category", $category);
+            $stmt->bindParam(":image", $image_name_only);
+            $stmt->bindParam(":user_id", $this->userId);
 
-        if ($stmt->execute()) {
-            http_response_code(201);
-            return json_encode(["message" => "Product was created."]);
-        } else {
-            http_response_code(503);
-            return json_encode(["message" => "Unable to create product."]);
+            if ($stmt->execute()) {
+                error_log("CREATE PRODUCT - Product created successfully");
+                http_response_code(201);
+                return json_encode(["message" => "Product was created."]);
+            } else {
+                error_log("CREATE PRODUCT - Database execution failed: " . print_r($stmt->errorInfo(), true));
+                http_response_code(503);
+                return json_encode(["message" => "Unable to create product."]);
+            }
+        } catch (Exception $e) {
+            error_log("CREATE PRODUCT - Database exception: " . $e->getMessage());
+            http_response_code(500);
+            return json_encode(["error" => "Database error: " . $e->getMessage()]);
         }
     }
 
@@ -113,7 +162,7 @@ class ProductService
         $stmt->execute();
 
         $products_arr = ["records" => []];
-        $base_url = 'http://localhost/localfit/e-comm-images/';
+        $base_url = 'https://images.localfit.store/';
     
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             $row['image'] = $base_url . $row['image'];
@@ -139,7 +188,7 @@ class ProductService
 //     $stmt->execute();
 
 //     $products_arr = ["records" => []];
-//     $base_url = 'http://localhost/localfit/e-comm-images/';
+//     $base_url = 'http://localhost/E-comms/ecomm/e-comm/e-comm-images/';
 //     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
 //         $row['image'] = $base_url . $row['image'];
 //         $products_arr["records"][] = $row;

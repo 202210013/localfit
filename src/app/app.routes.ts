@@ -9,6 +9,7 @@ import { ProductsMainComponent } from './product-main/product-main.component';
 import { MessageComponent } from './message/message.component';
 import { AdminComponent } from './admin/admin.component'; 
 import { LoginECommComponent as AdminLoginComponent } from './admin-login/admin-login.component';
+import { OrdersComponent } from './orders/orders.component';
 
 export const routes: Routes = [
     { path: '', redirectTo: 'product-main', pathMatch: 'full' },
@@ -20,5 +21,6 @@ export const routes: Routes = [
     { path: 'register', component: RegisterECommComponent },
     { path: 'messages', component: MessageComponent, canActivate: [AuthGuard] },
     { path: 'admin', component: AdminComponent, canActivate: [AuthGuard] },
+    { path: 'orders', component: OrdersComponent },
     { path: '', component: ProductsMainComponent }
 ];

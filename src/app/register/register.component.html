@@ -1,63 +1,127 @@
-<div class="position-relative">
-    <div class="area">
-        <ul class="circles">
-            <li></li>
-            <li></li>
-            <li></li>
-            <li></li>
-            <li></li>
-            <li></li>
-            <li></li>
-            <li></li>
-            <li></li>
-            <li></li>
-        </ul>
+<div class="modern-register-container">
+    <!-- Background Elements -->
+    <div class="background-shapes">
+        <div class="floating-shape shape-1"></div>
+        <div class="floating-shape shape-2"></div>
+        <div class="floating-shape shape-3"></div>
+        <div class="floating-shape shape-4"></div>
+        <div class="floating-shape shape-5"></div>
     </div>
-    
-    <div class="product-container">
-    <div class="bubbles">
-        <div class="bubble"></div>
-        <div class="bubble"></div>
-        <div class="bubble"></div>
-        <div class="bubble"></div>
-        <div class="bubble"></div>
-        <div class="bubble"></div>
-        <div class="bubble"></div>
-        <div class="bubble"></div>
-        <div class="bubble"></div>
-        <div class="bubble"></div>
-    </div>
-    <div class="product-container-laptop">
-        <!-- ...rest of your content... -->
-    </div>
-</div>
 
-    <div class="form-container">
+    <!-- Animated Background Gradient -->
+    <div class="animated-bg"></div>
 
-        <div class="board-form-inner2">
+    <!-- Register Card Container -->
+    <div class="register-card-container">
+    <!-- Register Card Container -->
+    <div class="register-card-container">
+        <div class="register-card">
+            <!-- Brand Logo/Header -->
+            <div class="register-header">
+                <div class="brand-icon">
+                    <i class="fas fa-user-plus"></i>
+                </div>
+                <h2 class="register-title">Join Us Today</h2>
+                <p class="register-subtitle">Create your new account</p>
+            </div>
 
-            <form class="sticky" [formGroup]="registerForm" (ngSubmit)="register()">
-                <div class="header">
-                    <h2 class="black">Register</h2>
-                    <hr class="white">
+            <!-- Register Form -->
+            <form class="register-form" [formGroup]="registerForm" (ngSubmit)="register()">
+                <div class="form-group">
+                    <div class="input-container">
+                        <i class="fas fa-user input-icon"></i>
+                        <input 
+                            id="name" 
+                            formControlName="name" 
+                            type="text" 
+                            placeholder=" "
+                            class="form-input">
+                        <label for="name" class="form-label">Full Name</label>
+                    </div>
                 </div>
-                <div>
-                    <label for="name">Name</label>
-                    <input id="name" formControlName="name" type="text">
+
+                <div class="form-group">
+                    <div class="input-container">
+                        <i class="fas fa-envelope input-icon"></i>
+                        <input 
+                            id="email" 
+                            formControlName="email" 
+                            type="email" 
+                            placeholder=" "
+                            class="form-input">
+                        <label for="email" class="form-label">Email Address</label>
+                    </div>
                 </div>
-                <div>
-                    <label for="email">Email</label>
-                    <input id="email" formControlName="email" type="email">
+
+                <div class="form-group">
+                    <div class="input-container">
+                        <i class="fas fa-lock input-icon"></i>
+                        <input 
+                            id="password" 
+                            formControlName="password" 
+                            [type]="showPassword ? 'text' : 'password'" 
+                            placeholder=" "
+                            class="form-input">
+                        <label for="password" class="form-label">Password</label>
+                        <button type="button" class="password-toggle" (click)="togglePasswordVisibility()">
+                            <i class="fas" [class.fa-eye]="!showPassword" [class.fa-eye-slash]="showPassword"></i>
+                        </button>
+                    </div>
+                    
+                    <!-- Enhanced Password Strength Indicator -->
+                    <div class="password-strength-container" *ngIf="registerForm.get('password')?.value">
+                        <div class="password-strength-bar">
+                            <div class="strength-segment" 
+                                 [class.active]="passwordStrength >= 1"
+                                 [class.very-weak]="passwordStrength === 1"></div>
+                            <div class="strength-segment" 
+                                 [class.active]="passwordStrength >= 2"
+                                 [class.weak]="passwordStrength === 2"></div>
+                            <div class="strength-segment" 
+                                 [class.active]="passwordStrength >= 3"
+                                 [class.fair]="passwordStrength === 3"></div>
+                            <div class="strength-segment" 
+                                 [class.active]="passwordStrength >= 4"
+                                 [class.good]="passwordStrength === 4"></div>
+                            <div class="strength-segment" 
+                                 [class.active]="passwordStrength >= 5"
+                                 [class.strong]="passwordStrength >= 5"></div>
+                        </div>
+                        <div class="password-strength-text" 
+                             [ngClass]="{
+                               'very-weak-text': passwordStrength <= 1,
+                               'weak-text': passwordStrength === 2,
+                               'fair-text': passwordStrength === 3,
+                               'good-text': passwordStrength === 4,
+                               'strong-text': passwordStrength >= 5
+                             }">
+                            <i class="fas fa-shield-alt"></i>
+                            {{ passwordStrengthText }}
+                        </div>
+                    </div>
                 </div>
-                <div>
-                    <label for="password">Password</label>
-                    <input id="password" formControlName="password" type="password">
+
+                <div class="terms-container">
+                    <input type="checkbox" id="terms" class="checkbox" required>
+                    <label for="terms" class="terms-label">
+                        I agree to the <a href="#" class="terms-link">Terms of Service</a> and <a href="#" class="terms-link">Privacy Policy</a>
+                    </label>
                 </div>
-                <hr>
-                <button type="submit">Register</button>
-                <button class="submit1" (click)="goToLogin()">Sign in?</button>
+
+                <button type="submit" class="register-btn">
+                    <span>Create Account</span>
+                    <i class="fas fa-arrow-right"></i>
+                </button>
+
+                <div class="divider">
+                    <span>or</span>
+                </div>
+
+                <button type="button" class="login-btn" (click)="goToLogin()">
+                    <i class="fas fa-sign-in-alt"></i>
+                    <span>Already have an account? Sign In</span>
+                </button>
             </form>
         </div>
     </div>
-
 </div>

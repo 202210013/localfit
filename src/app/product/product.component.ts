@@ -19,7 +19,7 @@ export class ProductComponent implements OnInit {
     products: Product[] | undefined;
     allProducts: Product[] | undefined;
     productForm: FormGroup = new FormGroup({});
-    baseUrl: string = 'http://localhost/localfit/e-comm-images/';
+    baseUrl: string = 'https://images.localfit.store/';
     updateMode = false;
     updateForm: FormGroup = new FormGroup({});
     selectedProductId: number | null = null;
@@ -66,7 +66,7 @@ export class ProductComponent implements OnInit {
             price: '',
             description: '',
             image: '',
-            category: this.categories[9]
+            category: this.categories[0]
         });
         this.fileName = '';
         this.previewUrl = undefined;
@@ -80,7 +80,7 @@ export class ProductComponent implements OnInit {
             price: new FormControl(''),
             description: new FormControl(''),
             image: new FormControl(''),
-            category: new FormControl(this.categories[9]) // Default to "Other"
+            category: new FormControl(this.categories[0]) // Default to first category instead of [9]
         });
 
         this.updateForm = new FormGroup({
@@ -88,7 +88,7 @@ export class ProductComponent implements OnInit {
             price: new FormControl(''),
             description: new FormControl(''),
             image: new FormControl(''),
-            category: new FormControl(this.categories[9]) // Default to "Other"
+            category: new FormControl(this.categories[0]) // Default to first category instead of [9]
         });
 
         this.getProducts();
@@ -132,6 +132,10 @@ export class ProductComponent implements OnInit {
           this.router.navigate(['/']);  // Redirect to landing page
         }
       });
+    }
+
+    goToAdmin() {
+        this.router.navigate(['/admin']);
     }
 
     getImageUrl(imagePath: string): string {
@@ -368,3 +372,4 @@ export class ProductComponent implements OnInit {
         return this.carts?.reduce((total, cart) => total + cart.price * cart.quantity, 0) ?? 0;
     }
 }
+

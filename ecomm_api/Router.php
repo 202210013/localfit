@@ -234,6 +234,12 @@ switch ($method) {
 
             case 'orders':
                 $data = json_decode(file_get_contents('php://input'), true);
+                
+                // Debug logging for troubleshooting
+                error_log("=== ORDERS API DEBUG ===");
+                error_log("Data received: " . print_r($data, true));
+                error_log("Request method: " . $_SERVER['REQUEST_METHOD']);
+                
                 if (isset($data['action']) && $data['action'] === 'approve' && isset($data['orderId'])) {
                     requireAuthentication(); // Only admin can approve
                     echo $orderService->approveOrder($data['orderId']);
@@ -243,11 +249,32 @@ switch ($method) {
                     requireAuthentication(); // Only admin can decline
                     echo $orderService->declineOrder($data['orderId']);
                 }
+                // ADD THIS BLOCK for ready-for-pickup
+                elseif (isset($data['action']) && $data['action'] === 'ready-for-pickup' && isset($data['orderId'])) {
+                    requireAuthentication(); // Only admin can mark ready for pickup
+                    echo $orderService->markReadyForPickup($data['orderId']);
+                }
+                // ADD THIS BLOCK for confirm-pickup
+                elseif (isset($data['action']) && $data['action'] === 'confirm-pickup' && isset($data['orderId']) && isset($data['customerEmail'])) {
+                    error_log("Confirm pickup request - OrderID: {$data['orderId']}, Customer: {$data['customerEmail']}");
+                    
+                    // Temporarily remove authentication to debug
+                    // requireAuthentication(); // Customer needs to be authenticated
+                    
+                    echo $orderService->confirmPickup($data['orderId'], $data['customerEmail']);
+                }
+                // Test endpoint for debugging
+                elseif (isset($data['action']) && $data['action'] === 'test-pickup') {
+                    error_log("Test pickup endpoint reached");
+                    echo json_encode(["success" => true, "message" => "Test endpoint working"]);
+                }
                 elseif (is_array($data) && isset($data[0]['customer'])) {
                     echo $orderService->createOrders($data);
                 } else {
+                    error_log("Invalid order data - falling through to 400 error");
+                    error_log("Data structure: " . print_r($data, true));
                     http_response_code(400);
-                    echo json_encode(["error" => "Invalid order data"]);
+                    echo json_encode(["error" => "Invalid order data", "received_data" => $data]);
                 }
             break;
 

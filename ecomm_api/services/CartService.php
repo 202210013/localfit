@@ -38,6 +38,7 @@ class CartService
 
         $productId = htmlspecialchars(strip_tags($data->product_id));
         $quantity = htmlspecialchars(strip_tags($data->quantity));
+        $size = isset($data->size) ? htmlspecialchars(strip_tags($data->size)) : 'M';
 
         // Check if the product exists in the products table
         $query = "SELECT id FROM products WHERE id = :product_id";
@@ -51,11 +52,12 @@ class CartService
         }
 
         $query = "INSERT INTO " . $this->table_name . " 
-              SET product_id=:product_id, quantity=:quantity, user_id=:user_id";
+              SET product_id=:product_id, quantity=:quantity, size=:size, user_id=:user_id";
         $stmt = $this->conn->prepare($query);
 
         $stmt->bindParam(":product_id", $productId);
         $stmt->bindParam(":quantity", $quantity);
+        $stmt->bindParam(":size", $size);
         $stmt->bindParam(":user_id", $this->userId);
 
         if ($stmt->execute()) {
@@ -69,7 +71,7 @@ class CartService
 
     public function readCarts()
     {
-        $query = "SELECT c.id, c.product_id, c.quantity, c.user_id, p.name, p.price, p.description, p.image 
+        $query = "SELECT c.id, c.product_id, c.quantity, c.size, c.user_id, p.name, p.price, p.description, p.image 
               FROM " . $this->table_name . " c 
               INNER JOIN products p ON c.product_id = p.id 
               WHERE c.user_id = :user_id

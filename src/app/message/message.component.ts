@@ -39,7 +39,7 @@ export class MessageComponent implements OnInit, OnDestroy {
     this.socket = io('https://localfit.onrender.com');
   }
   ngOnInit() {
-    this.http.get<{ id: number, name: string, email: string }[]>('https://api.localfit.store/ecomm_api/Router.php?request=all-users')
+     this.http.get<{ id: number, name: string, email: string }[]>('https://api.localfit.store/ecomm_api/Router.php?request=all-users')
   .subscribe(users => {
     this.users = users;
   });
@@ -98,7 +98,7 @@ export class MessageComponent implements OnInit, OnDestroy {
     };
     this.socket.emit('send-message', msg);
     // Save to backend
-    this.http.post('https://api.localfit.store/ecomm_api/Router.php?request=send-message', msg)
+     this.http.post('https://api.localfit.store/ecomm_api/Router.php?request=send-message', msg)
       .subscribe();
     this.messageForm.reset();
   }

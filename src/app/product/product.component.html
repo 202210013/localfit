@@ -8,18 +8,8 @@
                 <i class="fa-solid fa-clipboard header-icon"></i>
             </div>
             <div class="header-right">
-                <button class="icon-mid" (click)="goToMessege()">
-                    <i class="fa-solid fa-envelope"></i>
-                </button>
-                <button class="icon-mid" (click)="goToProductListing()">
-                    <i class="fa-solid fa-shop"></i>
-                </button>
-                <button class="icon-mid" (click)="goToCart()">
-                    <i class="fa-solid fa-cart-shopping"></i>
-                    <span class="cart-l" *ngIf="carts?.length">{{ carts?.length }}</span>
-                </button>
-                <button class="icon-mid" (click)="logout()">
-                    <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                <button class="icon-mid" (click)="goToAdmin()">
+                    <i class="fa-solid fa-arrow-left"></i>
                 </button>
             </div>
         </div>
@@ -174,7 +164,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                 <button type="button" class="btn btn-primary" *ngIf="selectedProduct"
-                    (click)="deleteProduct(selectedProduct.id)" data-bs-dismiss="modal">Delete</button>
+                    (click)="selectedProduct.id && deleteProduct(selectedProduct.id!)" data-bs-dismiss="modal">Delete</button>
             </div>
         </div>
     </div>

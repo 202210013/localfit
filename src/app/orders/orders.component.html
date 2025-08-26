@@ -1,0 +1,165 @@
+<div class="orders-container">
+  <div class="orders-wrapper">
+    
+    <!-- Header -->
+    <div class="orders-header">
+      <button class="back-btn" (click)="goBack()">
+        <i class="fa-solid fa-arrow-left"></i>
+        Back
+      </button>
+      <h1>My Orders</h1>
+      <div class="header-spacer"></div>
+    </div>
+
+    <!-- Tab Navigation -->
+    <div class="tab-navigation">
+      <button 
+        class="tab-btn" 
+        [class.active]="activeTab === 'received'"
+        (click)="switchTab('received')">
+        <i class="fa-solid fa-inbox"></i>
+        Approved Orders ({{ myOrders.length }})
+      </button>
+      <button 
+        class="tab-btn" 
+        [class.active]="activeTab === 'made'"
+        (click)="switchTab('made')">
+        <i class="fa-solid fa-shopping-bag"></i>
+        Orders Made ({{ myPurchases.length }})
+      </button>
+    </div>
+
+    <!-- Sort Controls -->
+    <div class="sort-controls" *ngIf="(activeTab === 'received' && myOrders.length > 0) || (activeTab === 'made' && myPurchases.length > 0)">
+      <div class="sort-wrapper">
+        <label for="sort-select">
+          <i class="fa-solid fa-sort"></i>
+          Sort by:
+        </label>
+        <select id="sort-select" [value]="sortBy" (change)="onSortChange($event)" class="sort-select">
+          <option *ngFor="let option of sortOptions" [value]="option.value">
+            {{ option.label }}
+          </option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Loading State -->
+    <div *ngIf="loading" class="loading-container">
+      <i class="fa-solid fa-spinner fa-spin"></i>
+      <p>Loading orders...</p>
+    </div>
+
+    <!-- Orders Received Tab (Approved Only) -->
+    <div *ngIf="!loading && activeTab === 'received'" class="orders-content">
+      <div *ngIf="myOrders.length === 0" class="no-orders">
+        <i class="fa-solid fa-check-circle"></i>
+        <h3>No approved orders yet</h3>
+        <p>When you approve customer orders, they will appear here.</p>
+      </div>
+
+      <div *ngIf="myOrders.length > 0" class="orders-list">
+        <div *ngFor="let order of myOrders" class="order-card">
+          <div class="order-header">
+            <div class="order-info">
+              <h3>Order #{{ order.id }}</h3>
+              <span class="order-date">{{ formatDate(order.created_at || order.order_date || '') }}</span>
+            </div>
+            <div class="order-status">
+              <span [class]="getStatusClass(order.status)">
+                {{ order.status | titlecase }}
+              </span>
+            </div>
+          </div>
+
+          <div class="order-body">
+            <div class="product-info">
+              <img [src]="getImageUrl(order.product_image || '')" alt="Product" class="product-image">
+              <div class="product-details">
+                <h4>{{ getProductName(order) }}</h4>
+                <p class="buyer-info">
+                  <i class="fa-solid fa-user"></i>
+                  Buyer: {{ getBuyerName(order) }}
+                </p>
+                <p class="quantity">Quantity: {{ order.quantity }}</p>
+              </div>
+            </div>
+            <div class="order-total">
+              <h3>₱ {{ getTotalPrice(order) }}</h3>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Orders Made Tab -->
+    <div *ngIf="!loading && activeTab === 'made'" class="orders-content">
+      <div *ngIf="myPurchases.length === 0" class="no-orders">
+        <i class="fa-solid fa-shopping-bag"></i>
+        <h3>No orders made yet</h3>
+        <p>Your purchase history will appear here.</p>
+      </div>
+
+      <div *ngIf="myPurchases.length > 0" class="orders-list">
+        <div *ngFor="let order of myPurchases" class="order-card">
+          <div class="order-header">
+            <div class="order-info">
+              <h3>Order #{{ order.id }}</h3>
+              <span class="order-date">{{ formatDate(order.created_at || order.order_date || '') }}</span>
+            </div>
+            <div class="order-status">
+              <span [class]="getStatusClass(order.status)">
+                {{ order.status | titlecase }}
+              </span>
+            </div>
+          </div>
+
+          <div class="order-body">
+            <div class="product-info">
+              <img [src]="getImageUrl(order.product_image || '')" alt="Product" class="product-image">
+              <div class="product-details">
+                <h4>{{ getProductName(order) }}</h4>
+                <p class="quantity">Quantity: {{ order.quantity }}</p>
+              </div>
+            </div>
+            <div class="order-actions">
+              <div class="order-total">
+                <h3>₱ {{ getTotalPrice(order) }}</h3>
+              </div>
+              <!-- Pickup confirmation button for ready orders -->
+              <div class="action-buttons" *ngIf="order.status === 'ready-for-pickup'">
+                <button 
+                  class="confirm-pickup-btn" 
+                  (click)="confirmPickup(order)"
+                  title="Confirm that you have picked up this order">
+                  <i class="fa-solid fa-check-circle"></i>
+                  Confirm Pickup
+                </button>
+              </div>
+              <!-- Status message for other statuses -->
+              <div class="status-message" *ngIf="order.status !== 'ready-for-pickup'">
+                <span *ngIf="order.status === 'pending'" class="status-text pending">
+                  <i class="fa-solid fa-clock"></i>
+                  Awaiting approval
+                </span>
+                <span *ngIf="order.status === 'approved'" class="status-text approved">
+                  <i class="fa-solid fa-box"></i>
+                  Being prepared
+                </span>
+                <span *ngIf="order.status === 'completed'" class="status-text completed">
+                  <i class="fa-solid fa-check-double"></i>
+                  Order completed
+                </span>
+                <span *ngIf="order.status === 'declined'" class="status-text declined">
+                  <i class="fa-solid fa-times-circle"></i>
+                  Order declined
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>

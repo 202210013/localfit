@@ -12,6 +12,7 @@ class ProductService1
     public function __construct($db)
     {
         $this->conn = $db;
+        $this->upload_dir = $_SERVER['DOCUMENT_ROOT'] . '/e-comm-images/';
     }
 
     public function createProduct()

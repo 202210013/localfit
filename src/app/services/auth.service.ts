@@ -13,9 +13,9 @@ export class AuthService {
       throw new Error('Method not implemented.');
     }
     // for lolcalhost
-    apiUrl = 'http://localhost/locafit/ecomm_api/Router.php?request=';
+    // apiUrl = 'http://localhost/E-comms/ecomm/e-comm/ecomm_api/Router.php?request=';
     // for hostinger
-    // apiUrl = 'https://api.localfit.store/ecomm_api/Router.php?request=';
+    apiUrl = 'https://api.localfit.store/ecomm_api/Router.php?request=';
      
     private token: string = '';
     private userId: number | undefined;

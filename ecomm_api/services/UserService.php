@@ -98,4 +98,148 @@ public function registerUser($data) {
             return json_encode(["valid" => false, "message" => "Invalid token."]);
         }
     }
+
+    // Profile Management Methods
+    public function getUserProfile($userId) {
+        $query = "SELECT id, name, email, phone, address, bio, profile_image, created_at, updated_at FROM users WHERE id = :userId";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(":userId", $userId);
+        $stmt->execute();
+        
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($user) {
+            return json_encode($user);
+        } else {
+            http_response_code(404);
+            return json_encode(["error" => "User not found."]);
+        }
+    }
+
+    public function updateUserProfile($userId, $data) {
+        // First, check if user exists
+        $checkQuery = "SELECT id FROM users WHERE id = :userId";
+        $checkStmt = $this->conn->prepare($checkQuery);
+        $checkStmt->bindParam(":userId", $userId);
+        $checkStmt->execute();
+        
+        if ($checkStmt->rowCount() === 0) {
+            http_response_code(404);
+            return json_encode(["error" => "User not found."]);
+        }
+
+        // Build dynamic update query
+        $fields = [];
+        $params = [':userId' => $userId];
+        
+        $allowedFields = ['name', 'email', 'phone', 'address', 'bio', 'profile_image'];
+        foreach ($allowedFields as $field) {
+            if (isset($data[$field])) {
+                $fields[] = "$field = :$field";
+                $params[":$field"] = $data[$field];
+            }
+        }
+
+        if (empty($fields)) {
+            http_response_code(400);
+            return json_encode(["error" => "No valid fields provided for update."]);
+        }
+
+        // Add updated_at timestamp
+        $fields[] = "updated_at = NOW()";
+        
+        $query = "UPDATE users SET " . implode(', ', $fields) . " WHERE id = :userId";
+        $stmt = $this->conn->prepare($query);
+        
+        if ($stmt->execute($params)) {
+            // Return updated user data
+            return $this->getUserProfile($userId);
+        } else {
+            http_response_code(400);
+            return json_encode(["error" => "Unable to update user profile."]);
+        }
+    }
+
+    public function changeUserPassword($userId, $currentPassword, $newPassword) {
+        // First, verify current password
+        $query = "SELECT password FROM users WHERE id = :userId";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(":userId", $userId);
+        $stmt->execute();
+        
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$user) {
+            http_response_code(404);
+            return json_encode(["error" => "User not found."]);
+        }
+
+        if (!password_verify($currentPassword, $user['password'])) {
+            http_response_code(400);
+            return json_encode(["error" => "Current password is incorrect."]);
+        }
+
+        // Update with new password
+        $hashedPassword = password_hash($newPassword, PASSWORD_BCRYPT);
+        $updateQuery = "UPDATE users SET password = :password, updated_at = NOW() WHERE id = :userId";
+        $updateStmt = $this->conn->prepare($updateQuery);
+        $updateStmt->bindParam(":password", $hashedPassword);
+        $updateStmt->bindParam(":userId", $userId);
+        
+        if ($updateStmt->execute()) {
+            return json_encode(["message" => "Password changed successfully."]);
+        } else {
+            http_response_code(400);
+            return json_encode(["error" => "Unable to change password."]);
+        }
+    }
+
+    public function uploadProfileImage($userId, $imageFile) {
+        // Validate file
+        $allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+        $maxSize = 5 * 1024 * 1024; // 5MB
+
+        if (!in_array($imageFile['type'], $allowedTypes)) {
+            http_response_code(400);
+            return json_encode(["error" => "Invalid file type. Only JPG, PNG, and GIF are allowed."]);
+        }
+
+        if ($imageFile['size'] > $maxSize) {
+            http_response_code(400);
+            return json_encode(["error" => "File size too large. Maximum 5MB allowed."]);
+        }
+
+        // Create upload directory if it doesn't exist
+        $uploadDir = "../e-comm-images/profile/";
+        if (!is_dir($uploadDir)) {
+            mkdir($uploadDir, 0777, true);
+        }
+
+        // Generate unique filename
+        $extension = pathinfo($imageFile['name'], PATHINFO_EXTENSION);
+        $fileName = uniqid() . '_profile.' . $extension;
+        $uploadPath = $uploadDir . $fileName;
+
+        if (move_uploaded_file($imageFile['tmp_name'], $uploadPath)) {
+            // Update user profile with new image path
+            $imagePath = "e-comm-images/profile/" . $fileName;
+            $updateQuery = "UPDATE users SET profile_image = :imagePath, updated_at = NOW() WHERE id = :userId";
+            $stmt = $this->conn->prepare($updateQuery);
+            $stmt->bindParam(":imagePath", $imagePath);
+            $stmt->bindParam(":userId", $userId);
+            
+            if ($stmt->execute()) {
+                return json_encode([
+                    "message" => "Profile image uploaded successfully.",
+                    "imagePath" => $imagePath
+                ]);
+            } else {
+                // Clean up uploaded file if database update fails
+                unlink($uploadPath);
+                http_response_code(400);
+                return json_encode(["error" => "Unable to update profile image path."]);
+            }
+        } else {
+            http_response_code(400);
+            return json_encode(["error" => "Failed to upload image."]);
+        }
+    }
 }
