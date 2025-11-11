@@ -1,0 +1,445 @@
+<div class="product-container">
+    <!-- Animated background shapes -->
+    <div class="floating-shapes">
+        <div class="shape shape-1"></div>
+        <div class="shape shape-2"></div>
+        <div class="shape shape-3"></div>
+        <div class="shape shape-4"></div>
+    </div>
+
+    <div class="product-container-laptop">
+        
+        <div class="modern-header">
+            <div class="header-content">
+                <div class="header-left">
+                    <div class="brand-section">
+                        <span class="brand-logo">LOCALFIT</span>
+                        <span class="brand-subtitle">Product Management</span>
+                    </div>
+                    <div class="header-icon-wrapper">
+                        <i class="fa-solid fa-box-open header-icon"></i>
+                    </div>
+                </div>
+                <div class="header-right">
+                    <button class="back-btn" (click)="goToAdmin()">
+                        <i class="fa-solid fa-arrow-left"></i>
+                        <span>Back to Admin</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="products-section">
+            <div class="section-header">
+                <h2 class="section-title">Your Products</h2>
+                <button class="add-product-btn" data-bs-toggle="modal" data-bs-target="#createProd">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>Add New Product</span>
+                </button>
+            </div>
+
+            <div class="products-grid">
+                <div class="product-card" *ngFor="let product of products">
+                    <div class="card-image-container">
+                        <img [src]="getImageUrl(product.image)" (click)="openModal(product)" 
+                             class="product-image" alt="{{product.name}}">
+                        <div class="image-overlay">
+                            <button class="overlay-btn view-btn" (click)="openModal(product)">
+                                <i class="fa-solid fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="card-content">
+                        <div class="product-info">
+                            <h3 class="product-name">{{ product.name }}</h3>
+                            <p class="product-description">{{ product.description }}</p>
+                            <div class="product-price">₱{{ product.price }}</div>
+                            
+                            <!-- Stock Quantity Display -->
+                            <div class="product-quantity" [ngClass]="getStockStatus(product)">
+                                <i class="fa-solid fa-boxes-stacked"></i>
+                                <span class="quantity-text">Stock: {{ getCurrentTotalQuantity(product) }}</span>
+                                <span class="stock-status" *ngIf="getStockStatus(product) === 'out-of-stock'">Out of Stock</span>
+                                <span class="stock-status low" *ngIf="getStockStatus(product) === 'low-stock'">Low Stock</span>
+                                <span class="stock-status good" *ngIf="getStockStatus(product) === 'in-stock'">In Stock</span>
+                            </div>
+                            
+                            <!-- Size-Specific Stock Display -->
+                            <div class="product-sizes" *ngIf="getSizesWithStock(product).length > 0">
+                                <span class="sizes-label">Stock by Size:</span>
+                                <div class="sizes-stock-list">
+                                    <div class="size-stock-item" *ngFor="let sizeInfo of getSizesWithStock(product)" 
+                                         [ngClass]="{'out-of-stock': !sizeInfo.inStock, 'low-stock': sizeInfo.inStock && sizeInfo.quantity < 3}">
+                                        <span class="size-name">{{ sizeInfo.size }}</span>
+                                        <span class="size-quantity">{{ sizeInfo.quantity }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="no-sizes" *ngIf="getProductSizes(product).length === 0">
+                                <i class="fa-solid fa-exclamation-triangle"></i>
+                                <span>No sizes available</span>
+                            </div>
+                        </div>
+                        
+                        <div class="card-actions">
+                            <button class="action-btn edit-btn" (click)="toggleUpdateMode(product)" 
+                                    data-bs-toggle="modal" data-bs-target="#editProd">
+                                <i class="fa-solid fa-pen-to-square"></i>
+                                <span>Edit</span>
+                            </button>
+                            <button class="action-btn delete-btn" (click)="deleteProduct(product.id)">
+                                <i class="fa-solid fa-trash"></i>
+                                <span>Delete</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+    </div>
+</div>
+
+<!-- Modern Image Modal -->
+<div class="modern-modal" [ngClass]="{'show': isModalOpen}" (click)="closeModal()">
+    <div class="modal-content-wrapper" (click)="$event.stopPropagation()">
+        <button class="close-btn" (click)="closeModal()">
+            <i class="fa-solid fa-times"></i>
+        </button>
+        <div class="modal-image-container">
+            <img class="modal-image" [src]="selectedProduct ? getImageUrl(selectedProduct.image) : ''" 
+                 [alt]="selectedProduct?.name">
+        </div>
+        <div class="modal-info" *ngIf="selectedProduct">
+            <h3>{{ selectedProduct.name }}</h3>
+            <p class="modal-description">{{ selectedProduct.description }}</p>
+            <div class="modal-price">₱{{ selectedProduct.price }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- image-modal.component.html -->
+<!-- <div class="image-modal-container">
+    <h2>Image Modal</h2>
+    <p>Here, we use CSS to create a modal (dialog box) that is hidden by default.</p>
+    <p>We use Angular to trigger the modal and to display the current image inside the modal when it is clicked on.</p>
+    <img [src]="imageUrl" alt="Northern Lights, Norway" width="300" height="200" (click)="openModal()"> -->
+
+
+<!-- </div> -->
+
+
+<!-- Modern Create Product Modal -->
+<div class="modal fade" id="createProd" tabindex="-1" aria-labelledby="createProdLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content modern-modal-content">
+            <div class="modal-header modern-modal-header">
+                <div class="modal-title-section">
+                    <i class="fa-solid fa-plus modal-icon"></i>
+                    <h5 class="modal-title" id="createProdLabel">Add New Product</h5>
+                </div>
+                <button type="button" class="modern-close-btn" data-bs-dismiss="modal">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+            <form [formGroup]="productForm" (ngSubmit)="createProduct()">
+                <div class="modal-body modern-modal-body">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="modern-label">
+                                <i class="fa-solid fa-tag label-icon"></i>
+                                Product Name
+                            </label>
+                            <input formControlName="name" type="text" class="modern-input" 
+                                   placeholder="Enter product name">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="modern-label">
+                                <i class="fa-solid fa-peso-sign label-icon"></i>
+                                Price
+                            </label>
+                            <input formControlName="price" type="number" class="modern-input" 
+                                   placeholder="0.00">
+                        </div>
+                        
+                        <div class="form-group full-width">
+                            <label class="modern-label">
+                                <i class="fa-solid fa-align-left label-icon"></i>
+                                Description
+                            </label>
+                            <textarea formControlName="description" class="modern-textarea" 
+                                      placeholder="Describe your product..."></textarea>
+                        </div>
+                        
+                        <div class="form-group full-width">
+                            <label class="modern-label">
+                                <i class="fa-solid fa-image label-icon"></i>
+                                Product Image
+                            </label>
+                            <div class="file-input-wrapper">
+                                <input type="file" (change)="onFileChange($event)" class="file-input" id="productImage" accept="image/*">
+                                <label for="productImage" class="file-input-label" [class.has-preview]="createImagePreview">
+                                    <div class="upload-content" *ngIf="!createImagePreview">
+                                        <i class="fa-solid fa-cloud-upload-alt"></i>
+                                        <span>Choose Image</span>
+                                    </div>
+                                    <div class="image-preview" *ngIf="createImagePreview">
+                                        <img [src]="createImagePreview" alt="Preview" class="preview-image">
+                                        <div class="preview-overlay">
+                                            <i class="fa-solid fa-edit"></i>
+                                            <span>Change Image</span>
+                                        </div>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group full-width">
+                            <label class="modern-label">
+                                <i class="fa-solid fa-ruler-combined label-icon"></i>
+                                Available Sizes
+                            </label>
+                            <div class="size-selection-container">
+                                <div class="size-buttons">
+                                    <button 
+                                        type="button"
+                                        *ngFor="let size of availableSizes" 
+                                        class="size-btn"
+                                        [class.selected]="isSizeSelected(size)"
+                                        (click)="toggleSize(size)"
+                                    >
+                                        {{ size }}
+                                    </button>
+                                </div>
+                                <div class="size-info" *ngIf="selectedSizes.length === 0">
+                                    <i class="fa-solid fa-info-circle"></i>
+                                    <span>Select sizes and set quantities for each</span>
+                                </div>
+                                
+                                <!-- Size Quantities Section -->
+                                <div class="size-quantities" *ngIf="selectedSizes.length > 0">
+                                    <div class="size-quantity-title">
+                                        <i class="fa-solid fa-boxes-stacked"></i>
+                                        <span>Stock Quantities by Size</span>
+                                    </div>
+                                    <div class="size-quantity-grid">
+                                        <div class="size-quantity-item" *ngFor="let size of selectedSizes">
+                                            <label class="size-label">{{ size }}:</label>
+                                            <input 
+                                                type="number" 
+                                                [(ngModel)]="sizeQuantities[size]"
+                                                [ngModelOptions]="{standalone: true}"
+                                                class="quantity-input"
+                                                min="0"
+                                                placeholder="0"
+                                            >
+                                        </div>
+                                    </div>
+                                    <div class="total-quantity">
+                                        <strong>Total Stock: {{ getTotalQuantity() }}</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer modern-modal-footer">
+                    <button type="button" class="btn-cancel" data-bs-dismiss="modal">
+                        <i class="fa-solid fa-times"></i>
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn-primary-modern" data-bs-dismiss="modal">
+                        <i class="fa-solid fa-plus"></i>
+                        Add Product
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modern Edit Product Modal -->
+<div class="modal fade" id="editProd" tabindex="-1" aria-labelledby="editProdLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content modern-modal-content">
+            <div class="modal-header modern-modal-header">
+                <div class="modal-title-section">
+                    <i class="fa-solid fa-pen-to-square modal-icon"></i>
+                    <h5 class="modal-title" id="editProdLabel">Edit Product</h5>
+                </div>
+                <button type="button" class="modern-close-btn" data-bs-dismiss="modal">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+            <form [formGroup]="updateForm" (ngSubmit)="updateProduct()">
+                <div class="modal-body modern-modal-body">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="modern-label">
+                                <i class="fa-solid fa-tag label-icon"></i>
+                                Product Name
+                            </label>
+                            <input formControlName="name" type="text" class="modern-input" 
+                                   placeholder="Enter product name">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="modern-label">
+                                <i class="fa-solid fa-peso-sign label-icon"></i>
+                                Price
+                            </label>
+                            <input formControlName="price" type="number" class="modern-input" 
+                                   placeholder="0.00">
+                        </div>
+                        
+                        <div class="form-group full-width">
+                            <label class="modern-label">
+                                <i class="fa-solid fa-align-left label-icon"></i>
+                                Description
+                            </label>
+                            <textarea formControlName="description" class="modern-textarea" 
+                                      placeholder="Describe your product..."></textarea>
+                        </div>
+                        
+                        <div class="form-group full-width">
+                            <label class="modern-label">
+                                <i class="fa-solid fa-image label-icon"></i>
+                                Update Product Image
+                            </label>
+                            <div class="file-input-wrapper">
+                                <input type="file" (change)="onFileChange($event)" class="file-input" id="editProductImage" accept="image/*">
+                                <label for="editProductImage" class="file-input-label" [class.has-preview]="editImagePreview">
+                                    <div class="upload-content" *ngIf="!editImagePreview">
+                                        <i class="fa-solid fa-cloud-upload-alt"></i>
+                                        <span>Choose New Image</span>
+                                    </div>
+                                    <div class="image-preview" *ngIf="editImagePreview">
+                                        <img [src]="editImagePreview" alt="Preview" class="preview-image">
+                                        <div class="preview-overlay">
+                                            <i class="fa-solid fa-edit"></i>
+                                            <span>Change Image</span>
+                                        </div>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group full-width">
+                            <label class="modern-label">
+                                <i class="fa-solid fa-ruler-combined label-icon"></i>
+                                Available Sizes
+                            </label>
+                            <div class="size-selection-container">
+                                <div class="size-buttons">
+                                    <button 
+                                        type="button"
+                                        *ngFor="let size of availableSizes" 
+                                        class="size-btn"
+                                        [class.selected]="isSizeSelected(size, true)"
+                                        (click)="toggleSize(size, true)"
+                                    >
+                                        {{ size }}
+                                    </button>
+                                </div>
+                                <div class="size-info" *ngIf="editSelectedSizes.length === 0">
+                                    <i class="fa-solid fa-info-circle"></i>
+                                    <span>Select sizes and set quantities for each</span>
+                                </div>
+                                
+                                <!-- Edit Size Quantities Section -->
+                                <div class="size-quantities" *ngIf="editSelectedSizes.length > 0">
+                                    <div class="size-quantity-title">
+                                        <i class="fa-solid fa-boxes-stacked"></i>
+                                        <span>Stock Quantities by Size</span>
+                                    </div>
+                                    <div class="size-quantity-grid">
+                                        <div class="size-quantity-item" *ngFor="let size of editSelectedSizes">
+                                            <label class="size-label">{{ size }}:</label>
+                                            <input 
+                                                type="number" 
+                                                [(ngModel)]="editSizeQuantities[size]"
+                                                [ngModelOptions]="{standalone: true}"
+                                                class="quantity-input"
+                                                min="0"
+                                                placeholder="0"
+                                            >
+                                        </div>
+                                    </div>
+                                    <div class="total-quantity">
+                                        <strong>Total Stock: {{ getTotalQuantity(true) }}</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer modern-modal-footer">
+                    <button type="button" class="btn-cancel" data-bs-dismiss="modal">
+                        <i class="fa-solid fa-times"></i>
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn-primary-modern" data-bs-dismiss="modal">
+                        <i class="fa-solid fa-save"></i>
+                        Update Product
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+
+<!-- goToCart -->
+<div class="modal fade" id="goToCart" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="exampleModalLabel">Modal title</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Your modal content here -->
+            </div>
+           
+        </div>
+    </div>
+</div>
+
+<!-- deleteProd -->
+<div class="modal fade" id="deleteProd" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            
+            <div class="modal-body">
+                <!-- Your modal content here -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" *ngIf="selectedProduct"
+                    (click)="selectedProduct.id && deleteProduct(selectedProduct.id!)" data-bs-dismiss="modal">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- logout -->
+<div class="modal fade" id="logout" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="exampleModalLabel">Modal title</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Your modal content here -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" (click)="logout()" data-bs-dismiss="modal">Logout</button>
+            </div>
+        </div>
+    </div>
+</div>

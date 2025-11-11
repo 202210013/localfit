@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Image Display</title>
+    <style>
+        .test-image {
+            width: 200px;
+            height: 200px;
+            object-fit: cover;
+            margin: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+        }
+        .error {
+            background-color: #ffebee;
+            color: #c62828;
+            padding: 10px;
+            margin: 10px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Testing Image Display</h1>
+    
+    <h2>Recent Images from e-comm-images folder:</h2>
+    
+    <!-- Test images directly from the folder -->
+    <div>
+        <h3>Direct filename URLs (new format):</h3>
+        <img src="http://localhost:3001/api/images/67e96269e8a71_gps logo.png" 
+             alt="GPS Logo" 
+             class="test-image" 
+             onerror="this.nextElementSibling.style.display='block'"
+             onload="console.log('✅ Loaded: GPS Logo')">
+        <div class="error" style="display:none">❌ Failed to load: GPS Logo</div>
+        
+        <img src="http://localhost:3001/api/images/67e965ca6b8e6_football TMTCS.jpg" 
+             alt="Football TMTCS" 
+             class="test-image" 
+             onerror="this.nextElementSibling.style.display='block'"
+             onload="console.log('✅ Loaded: Football TMTCS')">
+        <div class="error" style="display:none">❌ Failed to load: Football TMTCS</div>
+        
+        <img src="http://localhost:3001/api/images/68c16a94b9217_OHSP.png" 
+             alt="OHSP" 
+             class="test-image" 
+             onerror="this.nextElementSibling.style.display='block'"
+             onload="console.log('✅ Loaded: OHSP')">
+        <div class="error" style="display:none">❌ Failed to load: OHSP</div>
+    </div>
+    
+    <script>
+        console.log('🧪 Image test page loaded');
+        console.log('📍 Testing image URLs:');
+        console.log('- http://localhost:3001/api/images/67e96269e8a71_gps logo.png');
+        console.log('- http://localhost:3001/api/images/67e965ca6b8e6_football TMTCS.jpg');
+        console.log('- http://localhost:3001/api/images/68c16a94b9217_OHSP.png');
+        
+        // Test if the server is responding
+        fetch('http://localhost:3001/api/images/67e96269e8a71_gps logo.png')
+            .then(response => {
+                console.log('🌐 Server response status:', response.status);
+                if (response.ok) {
+                    console.log('✅ Server is responding to image requests');
+                } else {
+                    console.log('❌ Server returned error:', response.status, response.statusText);
+                }
+            })
+            .catch(error => {
+                console.log('❌ Server connection failed:', error.message);
+            });
+    </script>
+</body>
+</html>
