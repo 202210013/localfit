@@ -40,3 +40,18 @@ testem.log
 # System files
 .DS_Store
 Thumbs.db
+
+# Exclude backend API files (separate repository)
+ecomm_api/
+ecomm_api_nodejs/
+ecomm_api_old/
+
+# Database and config files
+*.sql
+*.keystore
+local.properties
+
+# Build artifacts
+*.apk
+*.aab
+*.idsig
