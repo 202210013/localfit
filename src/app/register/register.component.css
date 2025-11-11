@@ -701,3 +701,116 @@ body{
 .password-toggle:active {
     transform: translateY(-50%) scale(0.95);
 }
+
+/* Password Requirements Styles */
+.password-requirements {
+    margin-top: 12px;
+    padding: 16px;
+    background: rgba(239, 68, 68, 0.05);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: 12px;
+    font-size: 13px;
+}
+
+.requirement-message {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #ef4444;
+    font-weight: 500;
+    margin-bottom: 12px;
+}
+
+.requirement-message i {
+    font-size: 14px;
+}
+
+.requirement-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.requirement-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #6b7280;
+    transition: color 0.3s ease;
+}
+
+.requirement-item.met {
+    color: #10b981;
+}
+
+.requirement-item i {
+    font-size: 12px;
+    width: 16px;
+    display: flex;
+    justify-content: center;
+}
+
+.requirement-item .fa-check {
+    color: #10b981;
+}
+
+.requirement-item .fa-times {
+    color: #ef4444;
+}
+
+/* Disabled Button Styles */
+.register-btn.disabled {
+    background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
+    cursor: not-allowed;
+    opacity: 0.6;
+    transform: none !important;
+}
+
+.register-btn.disabled:hover {
+    background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
+    box-shadow: none;
+    transform: none !important;
+}
+
+.register-btn:disabled {
+    background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.register-btn:disabled:hover {
+    background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
+    box-shadow: none;
+    transform: none;
+}
+
+/* Field Hint Styling */
+.field-hint {
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: 6px;
+    font-size: 12px;
+    color: #dc2626;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    animation: fadeIn 0.3s ease;
+}
+
+.field-hint i {
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

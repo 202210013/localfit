@@ -11,6 +11,7 @@ export interface Order {
   product_image?: string;
   buyer_name?: string;
   buyer_email?: string;
+  buyer_cellphone?: string;
   seller_name?: string;
   created_at?: string;
   updated_at?: string;

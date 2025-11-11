@@ -20,7 +20,7 @@ export class AllProductsComponent implements OnInit {
   products: Product[] | undefined;
   allProducts: Product[] | undefined;
   productForm: FormGroup = new FormGroup({});
-  baseUrl: string = 'https://images.localfit.store/';
+  baseUrl: string = 'http://localhost:3001/e-comm-images/';
   updateMode = false;
   updateForm: FormGroup = new FormGroup({});
   selectedProductId: number | null = null;
@@ -41,12 +41,14 @@ export class AllProductsComponent implements OnInit {
 
   unreadMessages: number = 0; // Add this property
 
+  readyForPickupCount: number = 0; // Counter for ready for pickup orders
+
   userPostedProducts: Product[] = []; // Add this property to store products posted by the user
 
   largeAdImages: string[] = [
     'https://i.ibb.co/fGG71QSq/476456511-640897084960800-2564012019781491129-n.jpg',
-    'https://images.unsplash.com/photo-1512436991641-6745cdb1723f?auto=format&fit=crop&w=800&q=80',
-    'https://i.ibb.co/xKG3dNLg/abhay-siby-mathew-Lm-Eu-UMbd5-Rw-unsplash.jpg',
+    'https://i.postimg.cc/JhHbXV7b/IMG-7144.jpg',
+    'https://i.postimg.cc/t4N0HwGN/IMG-7141.jpg',
   ];
   currentAdIndex: number = 0;
   adInterval: any;
@@ -54,18 +56,21 @@ export class AllProductsComponent implements OnInit {
   openModal(product: Product) {
     this.selectedProduct = product;
     this.selectedSize = ''; // Reset size selection when opening modal
+    this.selectedPickupDate = ''; // Reset pickup date selection when opening modal
     this.isModalOpen = true;
   }
 
   selectProduct(product: Product) {
     this.selectedProduct = product;
     this.selectedSize = ''; // Reset size selection when selecting product
+    this.selectedPickupDate = ''; // Reset pickup date selection when selecting product
   }
 
   closeModal() {
     this.isModalOpen = false;
     this.selectedProduct = undefined;
     this.selectedSize = ''; // Reset size selection when closing modal
+    this.selectedPickupDate = ''; // Reset pickup date selection when closing modal
   }
 
 
@@ -90,10 +95,24 @@ export class AllProductsComponent implements OnInit {
     this.getAllProducts();
     this.getCarts();
     this.getUnreadMessages();
+    this.getReadyForPickupCount(); // Get ready for pickup orders count
     this.getUserPostedProducts(); // Fetch products posted by the current user
     this.selectedCategory = 'all';
     this.startAdSlideshow();
+    
+    // Initialize pickup date range (today + 30 days)
+    this.initializeDateRange();
   }
+  
+  initializeDateRange(): void {
+    const today = new Date();
+    const maxDate = new Date();
+    maxDate.setDate(today.getDate() + 30);
+    
+    this.minDate = today.toISOString().split('T')[0];
+    this.maxDate = maxDate.toISOString().split('T')[0];
+  }
+  
   getMessage() {
     throw new Error('Method not implemented.');
   }
@@ -154,12 +173,35 @@ logout() {
 }
 
   getImageUrl(image: string): string {
-    return this.baseUrl + image;
+    if (!image) return this.baseUrl + 'placeholder.jpg';
+    
+    // Handle different image path formats
+    let imagePath = image;
+    
+    // If it's a full file path (old format), extract just the filename
+    if (image.includes('\\') || image.includes('/')) {
+      // Extract filename from full path
+      imagePath = image.split(/[\\\/]/).pop() || image;
+    }
+    
+    // If it's already just a filename, use it as is
+    const finalUrl = this.baseUrl + imagePath;
+    
+    console.log('🖼️ Image URL construction:', { 
+      original: image, 
+      processed: imagePath, 
+      final: finalUrl 
+    });
+    
+    return finalUrl;
   }
 
   getProducts(): void {
     this.productService.getProducts().subscribe((response: any) => {
-      this.products = response.records;
+      // Process products to parse available_sizes from string to array
+      this.products = response.records.map((product: any) => {
+        return this.processProductSizes(product);
+      });
     });
   }
 
@@ -175,7 +217,10 @@ logout() {
   getAllProducts(): void {
   this.productService.getAllProducts().subscribe((response: any) => {
     console.log('API products:', response.records); // <-- Add this line
-    this.allProducts = response.records;
+    // Process products to parse available_sizes from string to array
+    this.allProducts = response.records.map((product: any) => {
+      return this.processProductSizes(product);
+    });
     this.filteredProducts = this.allProducts;
   });
 }
@@ -273,16 +318,86 @@ logout() {
     });
   }
 
-  sizes: string[] = ['S', 'M', 'L', 'XL']; // Add your available sizes here
+  // Remove static sizes array - now we'll use product's available sizes
   selectedSize: string = ''; // No default size - force user to select
 
-  addProductToCart(productId: number, quantity: number, size: string = ''): void {
+  // Process product to parse available_sizes from string to array if needed
+  processProductSizes(product: any): any {
+    if (product.available_sizes && typeof product.available_sizes === 'string') {
+      try {
+        // Try to parse as JSON array string
+        product.available_sizes = JSON.parse(product.available_sizes);
+      } catch {
+        // If parsing fails, try to split by comma or other delimiters
+        if (product.available_sizes.includes(',')) {
+          product.available_sizes = product.available_sizes.split(',').map((s: string) => s.trim());
+        } else if (product.available_sizes.includes('|')) {
+          product.available_sizes = product.available_sizes.split('|').map((s: string) => s.trim());
+        } else {
+          // If no delimiters, treat as single size
+          product.available_sizes = [product.available_sizes.trim()];
+        }
+      }
+    } else if (!product.available_sizes) {
+      // If no sizes are defined, set empty array
+      product.available_sizes = [];
+    }
+    return product;
+  }
+
+  // Get available sizes for any product (used in template)
+  getProductSizes(product: any): string[] {
+    if (product && product.available_sizes) {
+      // If it's already an array, return it
+      if (Array.isArray(product.available_sizes)) {
+        return product.available_sizes;
+      }
+      // If it's still a string, process it
+      if (typeof product.available_sizes === 'string') {
+        const processedProduct = this.processProductSizes(product);
+        return processedProduct.available_sizes;
+      }
+    }
+    return []; // Return empty array if no sizes available
+  }
+
+  // Get available sizes for the currently selected product
+  getAvailableSizes(): string[] {
+    if (this.selectedProduct && this.selectedProduct.available_sizes) {
+      return this.selectedProduct.available_sizes;
+    }
+    return []; // Return empty array if no sizes available
+  }
+
+  // Check if the product has any available sizes
+  hasAvailableSizes(): boolean {
+    return this.getAvailableSizes().length > 0;
+  }
+
+  // Pickup date properties
+  selectedPickupDate: string = '';
+  minDate: string = '';
+  maxDate: string = '';
+
+  addProductToCart(productId: number, quantity: number, size: string = '', pickupDate: string = ''): void {
     // Validate that size is selected
     if (!size || size.trim() === '') {
       Swal.fire({
         icon: 'warning',
         title: 'Size Required!',
         text: 'Please select a size before adding to cart.',
+        timer: 2000,
+        showConfirmButton: false
+      });
+      return;
+    }
+
+    // Validate that pickup date is selected
+    if (!pickupDate || pickupDate.trim() === '') {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Pickup Date Required!',
+        text: 'Please select a pickup date before adding to cart.',
         timer: 2000,
         showConfirmButton: false
       });
@@ -300,23 +415,100 @@ logout() {
       Swal.fire({
         icon: 'success',
         title: 'Cart Updated!',
-        text: `Product quantity updated in your cart (Size: ${size}).`,
+        text: `Product quantity updated in your cart (Size: ${size}, Pickup: ${pickupDate}).`,
         timer: 1200,
         showConfirmButton: false
+      }).then(() => {
+        // Redirect to cart after successful update
+        this.goToCart();
       });
     } else {
-      // Pass productId, quantity, and size to the service
-      this.productService.createCart(productId, quantity, size).subscribe((response: any) => {
+      // Pass productId, quantity, size, and pickup date to the service
+      this.productService.createCart(productId, quantity, size, pickupDate).subscribe((response: any) => {
         this.getCarts();
         Swal.fire({
           icon: 'success',
           title: 'Added to Cart!',
-          text: `Product added to your cart (Size: ${size}).`,
+          text: `Product added to your cart (Size: ${size}, Pickup: ${pickupDate}).`,
           timer: 1200,
           showConfirmButton: false
+        }).then(() => {
+          // Redirect to cart after successful addition
+          this.goToCart();
         });
       });
     }
+  }
+
+  buyNow(productId: number, quantity: number, size: string = '', pickupDate: string = ''): void {
+    // Validate that size is selected
+    if (!size || size.trim() === '') {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Size Required!',
+        text: 'Please select a size before proceeding to checkout.',
+        timer: 2000,
+        showConfirmButton: false
+      });
+      return;
+    }
+
+    // Validate that pickup date is selected
+    if (!pickupDate || pickupDate.trim() === '') {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Pickup Date Required!',
+        text: 'Please select a pickup date before proceeding to checkout.',
+        timer: 2000,
+        showConfirmButton: false
+      });
+      return;
+    }
+
+    // Show loading indicator
+    Swal.fire({
+      title: 'Processing...',
+      text: 'Adding item to order summary',
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
+
+    // Check if same product with same size already exists in cart
+    const existingCartItem = this.carts?.find(cart => 
+      cart.product_id === productId && cart.size === size
+    );
+
+    if (existingCartItem) {
+      // If exists, update quantity and proceed to order summary
+      existingCartItem.quantity += quantity;
+      this.updateCart(existingCartItem);
+      this.closeModal();
+      this.navigateToOrderSummary();
+    } else {
+      // Add to cart and then proceed to order summary
+      this.productService.createCart(productId, quantity, size, pickupDate).subscribe((response: any) => {
+        this.getCarts();
+        this.closeModal();
+        // Navigate to cart page as order summary with buy now indicator
+        this.navigateToOrderSummary();
+      });
+    }
+  }
+
+  private navigateToOrderSummary(): void {
+    // Close loading indicator
+    Swal.close();
+    
+    // Navigate to cart page with buy now query parameter to show summary section immediately
+    this.router.navigate(['/cart'], { 
+      queryParams: { 
+        buynow: 'true',
+        action: 'summary',
+        directCheckout: 'true'
+      } 
+    });
   }
 
   updateCart(cart: Cart): void {
@@ -359,6 +551,51 @@ logout() {
       error: (error: any) => {
         console.error('Error fetching unread messages:', error);
         this.unreadMessages = 0;
+      }
+    });
+  }
+
+  // Add a method to fetch ready for pickup orders count
+  getReadyForPickupCount(): void {
+    const currentUserEmail = localStorage.getItem('user_email');
+    if (!currentUserEmail) {
+      this.readyForPickupCount = 0;
+      return;
+    }
+
+    // Get orders from the same service used in orders component
+    this.productService.getMyOrders().subscribe({
+      next: (response: any) => {
+        const allOrders = Array.isArray(response) ? response : (response.records || []);
+        
+        // Filter for current user's ready for pickup orders
+        const readyForPickupOrders = allOrders.filter((order: any) => 
+          order.customer === currentUserEmail && order.status === 'ready-for-pickup'
+        );
+        
+        this.readyForPickupCount = readyForPickupOrders.length;
+      },
+      error: (error: any) => {
+        console.error('Error fetching ready for pickup orders:', error);
+        this.readyForPickupCount = 0;
+      }
+    });
+
+    // Also check purchases
+    this.productService.getMyPurchases().subscribe({
+      next: (response: any) => {
+        const allPurchases = Array.isArray(response) ? response : (response.records || []);
+        
+        // Filter for current user's ready for pickup purchases
+        const readyForPickupPurchases = allPurchases.filter((order: any) => 
+          order.customer === currentUserEmail && order.status === 'ready-for-pickup'
+        );
+        
+        // Add to existing count (in case orders and purchases are separate)
+        this.readyForPickupCount += readyForPickupPurchases.length;
+      },
+      error: (error: any) => {
+        console.error('Error fetching ready for pickup purchases:', error);
       }
     });
   }
@@ -412,6 +649,77 @@ ngOnDestroy(): void {
   }
 }
 
+// Quantity display methods
+getProductSizeQuantities(product: Product): { [size: string]: number } {
+  if (!product.size_quantities) {
+    return {};
+  }
+  
+  // If it's already an object, return it
+  if (typeof product.size_quantities === 'object') {
+    return product.size_quantities;
+  }
+  
+  // If it's a JSON string, parse it
+  if (typeof product.size_quantities === 'string') {
+    try {
+      const parsed = JSON.parse(product.size_quantities);
+      return typeof parsed === 'object' ? parsed : {};
+    } catch (e) {
+      console.error('Error parsing size_quantities:', e);
+      return {};
+    }
+  }
+  
+  return {};
+}
 
+// Get total quantity for product
+getTotalQuantity(product: Product): number {
+  // Calculate from size_quantities if available, otherwise use quantity field
+  if (product.size_quantities && typeof product.size_quantities === 'object') {
+    return Object.values(product.size_quantities).reduce((total: number, qty: number) => total + (qty || 0), 0);
+  } else {
+    // If quantity is a string (JSON), try to parse it; otherwise use the number
+    let quantity = product.quantity || 0;
+    if (typeof quantity === 'string') {
+      try {
+        const parsed = JSON.parse(quantity);
+        if (typeof parsed === 'object') {
+          return Object.values(parsed).reduce((total: number, qty: unknown) => total + (Number(qty) || 0), 0);
+        }
+        return Number(parsed) || 0;
+      } catch (e) {
+        return 0;
+      }
+    }
+    return Number(quantity) || 0;
+  }
+}
+
+// Get sizes with stock information
+getSizesWithStock(product: Product): { size: string, quantity: number, inStock: boolean }[] {
+  const sizeQuantities = this.getProductSizeQuantities(product);
+  const availableSizes = product.available_sizes || [];
+  
+  return availableSizes.map(size => ({
+    size,
+    quantity: sizeQuantities[size] || 0,
+    inStock: (sizeQuantities[size] || 0) > 0
+  }));
+}
+
+// Check if product has any stock
+hasStock(product: Product): boolean {
+  return this.getTotalQuantity(product) > 0;
+}
+
+// Get stock status for product
+getStockStatus(product: Product): 'out-of-stock' | 'low-stock' | 'in-stock' {
+  const totalQty = this.getTotalQuantity(product);
+  if (totalQty <= 0) return 'out-of-stock';
+  if (totalQty < 5) return 'low-stock';
+  return 'in-stock';
+}
 
 }

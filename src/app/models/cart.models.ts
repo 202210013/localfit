@@ -10,4 +10,5 @@ export interface Cart {
     description: string;
     image: string;
     size?: string;
+    pickup_date?: string;
 }

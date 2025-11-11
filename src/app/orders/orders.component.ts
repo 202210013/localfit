@@ -19,6 +19,7 @@ interface Order {
   created_at?: string;
   updated_at?: string;
   product_image?: string;
+  remarks?: string; // Add remarks for declined orders
   // Add calculated price
   calculatedPrice?: number;
 }
@@ -34,8 +35,8 @@ export class OrdersComponent implements OnInit, OnDestroy {
   myOrders: Order[] = []; // Orders received (as seller)
   myPurchases: Order[] = []; // Orders made (as buyer)
   allOrders: Order[] = []; // Store all orders before filtering
-  activeTab: 'received' | 'made' = 'received';
-  baseUrl: string = 'https://images.localfit.store/';
+  activeTab: 'pending' | 'ready-for-pickup' | 'declined' | 'completed' = 'pending';
+  baseUrl: string = 'http://localhost:3001/e-comm-images/';
   loading = false;
   
   // Add sorting properties
@@ -45,6 +46,12 @@ export class OrdersComponent implements OnInit, OnDestroy {
     { value: 'oldest', label: 'Oldest First' },
     { value: 'status', label: 'By Status' }
   ];
+
+  // Filtered orders by status
+  pendingOrders: Order[] = [];
+  readyForPickupOrders: Order[] = [];
+  declinedOrders: Order[] = [];
+  completedOrders: Order[] = [];
 
   constructor(
     private productService: ProductService,
@@ -61,24 +68,42 @@ export class OrdersComponent implements OnInit, OnDestroy {
   loadOrders(): void {
     this.loading = true;
     
+    // Get current user's email from localStorage
+    const currentUserEmail = localStorage.getItem('user_email');
+    
+    let ordersLoaded = false;
+    let purchasesLoaded = false;
+    
+    // Function to check if both API calls are complete and then filter
+    const checkAndFilter = () => {
+      if (ordersLoaded && purchasesLoaded) {
+        this.filterOrdersByStatus();
+        this.loading = false;
+      }
+    };
+    
     // Load orders received (as seller)
     this.productService.getMyOrders().subscribe({
       next: (response: any) => {
         console.log('Orders response:', response);
         this.allOrders = Array.isArray(response) ? response : (response.records || []);
         
-        // Filter to show only approved orders
-        this.myOrders = this.allOrders.filter(order => order.status === 'approved');
+        // Get all orders for the current user (remove status filtering)
+        this.myOrders = this.allOrders.filter(order => 
+          currentUserEmail && 
+          order.customer === currentUserEmail
+        );
         
         this.enrichOrdersWithPrices(this.myOrders);
-        this.sortOrders(); // Sort after loading
-        this.loading = false;
+        ordersLoaded = true;
+        checkAndFilter();
       },
       error: (error: any) => {
         console.error('Error loading orders:', error);
         this.myOrders = [];
         this.allOrders = [];
-        this.loading = false;
+        ordersLoaded = true;
+        checkAndFilter();
       }
     });
 
@@ -86,13 +111,23 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.productService.getMyPurchases().subscribe({
       next: (response: any) => {
         console.log('Purchases response:', response);
-        this.myPurchases = Array.isArray(response) ? response : (response.records || []);
+        const allPurchases = Array.isArray(response) ? response : (response.records || []);
+        
+        // Filter to show only purchases for the current user
+        this.myPurchases = allPurchases.filter((purchase: Order) => 
+          currentUserEmail && 
+          purchase.customer === currentUserEmail
+        );
+        
         this.enrichOrdersWithPrices(this.myPurchases);
-        this.sortOrders(); // Sort after loading
+        purchasesLoaded = true;
+        checkAndFilter();
       },
       error: (error: any) => {
         console.error('Error loading purchases:', error);
         this.myPurchases = [];
+        purchasesLoaded = true;
+        checkAndFilter();
       }
     });
   }
@@ -102,6 +137,12 @@ export class OrdersComponent implements OnInit, OnDestroy {
     const sortFn = this.getSortFunction();
     this.myOrders.sort(sortFn);
     this.myPurchases.sort(sortFn);
+    
+    // Also sort the filtered arrays
+    this.pendingOrders.sort(sortFn);
+    this.readyForPickupOrders.sort(sortFn);
+    this.declinedOrders.sort(sortFn);
+    this.completedOrders.sort(sortFn);
   }
 
   // Get sort function based on selected sort option
@@ -171,8 +212,57 @@ export class OrdersComponent implements OnInit, OnDestroy {
     });
   }
 
-  switchTab(tab: 'received' | 'made'): void {
+  switchTab(tab: 'pending' | 'ready-for-pickup' | 'declined' | 'completed'): void {
     this.activeTab = tab;
+  }
+
+  // Filter orders by status
+  filterOrdersByStatus(): void {
+    // Combine orders and purchases, removing duplicates by ID
+    const combinedOrders = [...this.myOrders, ...this.myPurchases];
+    const uniqueOrders = combinedOrders.filter((order, index, self) => 
+      index === self.findIndex(o => o.id === order.id)
+    );
+    
+    this.pendingOrders = uniqueOrders.filter(order => order.status === 'pending');
+    this.readyForPickupOrders = uniqueOrders.filter(order => order.status === 'ready-for-pickup');
+    this.declinedOrders = uniqueOrders.filter(order => order.status === 'declined');
+    this.completedOrders = uniqueOrders.filter(order => order.status === 'completed');
+    
+    // Sort after filtering
+    this.sortOrders();
+  }
+
+  // Get current active orders based on selected tab
+  getCurrentOrders(): Order[] {
+    switch(this.activeTab) {
+      case 'pending':
+        return this.pendingOrders;
+      case 'ready-for-pickup':
+        return this.readyForPickupOrders;
+      case 'declined':
+        return this.declinedOrders;
+      case 'completed':
+        return this.completedOrders;
+      default:
+        return [];
+    }
+  }
+
+  // Get empty state message based on active tab
+  getEmptyStateMessage(): string {
+    switch(this.activeTab) {
+      case 'pending':
+        return 'Orders awaiting approval will appear here.';
+      case 'ready-for-pickup':
+        return 'Orders ready for pickup will appear here.';
+      case 'declined':
+        return 'Declined orders will appear here.';
+      case 'completed':
+        return 'Completed orders will appear here.';
+      default:
+        return 'No orders found.';
+    }
   }
 
   approveOrder(orderId: number): void {
@@ -232,7 +322,12 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   getImageUrl(image: string): string {
     if (!image) return 'assets/placeholder-image.jpg'; // Fallback image
-    return this.baseUrl + image;
+    
+    // Extract filename from any path format
+    const filename = image.split('/').pop()?.split('\\').pop() || image;
+    
+    // Construct URL with base URL + filename
+    return this.baseUrl + filename.trim();
   }
 
   getStatusClass(status: string): string {
@@ -275,9 +370,9 @@ export class OrdersComponent implements OnInit, OnDestroy {
     return !!(order.calculatedPrice || order.total_price || order.price);
   }
 
-  // Add method to get total approved orders count for display
-  getApprovedOrdersCount(): number {
-    return this.allOrders.filter(order => order.status === 'approved').length;
+  // Add method to get total completed orders count for display
+  getCompletedOrdersCount(): number {
+    return this.allOrders.filter(order => order.status === 'completed').length;
   }
 
   // Method to confirm order pickup by customer

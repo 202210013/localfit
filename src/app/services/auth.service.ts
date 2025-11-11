@@ -9,13 +9,22 @@ import { Router } from '@angular/router';
     providedIn: 'root'
 })
 export class AuthService {
-    getCurrentUser() {
-      throw new Error('Method not implemented.');
+    getCurrentUser(): Observable<any> {
+        const headers = new HttpHeaders({
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.getToken()}`
+        });
+        
+        return this.http.get(`${this.apiUrl}api/check_login_status`, { 
+            headers: headers, 
+            withCredentials: true 
+        });
     }
     // for lolcalhost
     // apiUrl = 'http://localhost/E-comms/ecomm/e-comm/ecomm_api/Router.php?request=';
     // for hostinger
-    apiUrl = 'https://api.localfit.store/ecomm_api/Router.php?request=';
+    // apiUrl = 'https://api.localfit.store/ecomm_api/Router.php?request=';
+    private apiUrl = 'http://localhost:3001/';
      
     private token: string = '';
     private userId: number | undefined;
@@ -53,24 +62,22 @@ export class AuthService {
         });
 
         const data = { email, password };
-        const json = JSON.stringify(data);
 
-        return this.http.post(`${this.apiUrl}login`, json, { headers: headers, withCredentials: true });
+        return this.http.post(`${this.apiUrl}api/login`, data, { headers: headers, withCredentials: true });
     }
 
-    register(name: string, email: string, password: string): Observable<any> {
+    register(name: string, email: string, cellphone: string, password: string): Observable<any> {
         const headers = new HttpHeaders({
             'Content-Type': 'application/json'
         });
 
-        const data = { name, email, password };
-        const json = JSON.stringify(data);
+        const data = { name, email, cellphone, password };
 
-        return this.http.post(`${this.apiUrl}register`, json, { headers: headers, withCredentials: true });
+        return this.http.post(`${this.apiUrl}api/register`, data, { headers: headers, withCredentials: true });
     }
 
     logout(): Observable<any> {
-        return this.http.post(`${this.apiUrl}logout`, {}, { withCredentials: true }).pipe(
+        return this.http.post(`${this.apiUrl}api/logout`, {}, { withCredentials: true }).pipe(
             tap(() => {
                 if (isPlatformBrowser(this.platformId)) {
                     localStorage.removeItem('token');

@@ -22,6 +22,7 @@ export class RegisterECommComponent {
     this.registerForm = this.fb.group({
       name: ['', [Validators.required]],
       email: ['', [Validators.required, Validators.email]],
+      cellphone: ['', [Validators.required, Validators.pattern(/^(\+639|09)\d{9}$/)]],
       password: ['', [Validators.required]]
     });
 
@@ -82,6 +83,48 @@ export class RegisterECommComponent {
     }
   }
 
+  // Method to check if password is strong enough (minimum score of 4)
+  isPasswordStrong(): boolean {
+    return this.passwordStrength >= 4;
+  }
+
+  // Method to check if create button should be disabled
+  isCreateButtonDisabled(): boolean {
+    return !this.registerForm.valid || !this.isPasswordStrong();
+  }
+
+  // Helper methods for password requirements checking
+  hasLowercase(): boolean {
+    const password = this.registerForm.get('password')?.value || '';
+    return /[a-z]/.test(password);
+  }
+
+  hasUppercase(): boolean {
+    const password = this.registerForm.get('password')?.value || '';
+    return /[A-Z]/.test(password);
+  }
+
+  hasNumber(): boolean {
+    const password = this.registerForm.get('password')?.value || '';
+    return /\d/.test(password);
+  }
+
+  hasSpecialChar(): boolean {
+    const password = this.registerForm.get('password')?.value || '';
+    return /[!@#$%^&*(),.?":{}|<>]/.test(password);
+  }
+
+  hasMinLength(): boolean {
+    const password = this.registerForm.get('password')?.value || '';
+    return password.length >= 8;
+  }
+
+  // Helper method to check if cellphone number is valid
+  isCellphoneValid(): boolean {
+    const cellphone = this.registerForm.get('cellphone');
+    return cellphone ? cellphone.valid : false;
+  }
+
   goToLogin() {
     this.router.navigate(['/login']);
   }
@@ -91,29 +134,48 @@ export class RegisterECommComponent {
   }
 
   register() {
-    if (this.registerForm.valid) {
-      const { name, email, password } = this.registerForm.value;
-      this.authService.register(name, email, password).subscribe(
-        (response: any) => {
-          Swal.fire({
-            icon: 'success',
-            title: 'Registration Successful!',
-            text: 'You can now log in.',
-            showConfirmButton: false,
-            timer: 1800
-          });
-          setTimeout(() => this.router.navigate(['/login']), 1800);
-        },
-        (error: any) => {
-          Swal.fire({
-            icon: 'error',
-            title: 'Registration Failed',
-            text: error?.error?.message || 'Please try again.',
-            timer: 2000
-          });
-          console.error('Registration failed', error);
-        }
-      );
+    // Check if form is valid and password is strong
+    if (!this.registerForm.valid) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Form Invalid',
+        text: 'Please fill out all required fields correctly.',
+        timer: 2000
+      });
+      return;
     }
+
+    if (!this.isPasswordStrong()) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Password Too Weak',
+        text: 'Please use a stronger password. Your password should include uppercase letters, lowercase letters, numbers, and special characters.',
+        timer: 3000
+      });
+      return;
+    }
+
+    const { name, email, cellphone, password } = this.registerForm.value;
+    this.authService.register(name, email, cellphone, password).subscribe(
+      (response: any) => {
+        Swal.fire({
+          icon: 'success',
+          title: 'Registration Successful!',
+          text: 'You can now log in.',
+          showConfirmButton: false,
+          timer: 1800
+        });
+        setTimeout(() => this.router.navigate(['/login']), 1800);
+      },
+      (error: any) => {
+        Swal.fire({
+          icon: 'error',
+          title: 'Registration Failed',
+          text: error?.error?.message || 'Please try again.',
+          timer: 2000
+        });
+        console.error('Registration failed', error);
+      }
+    );
   }
 }

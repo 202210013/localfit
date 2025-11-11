@@ -5,10 +5,15 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import * as XLSX from 'xlsx';
 import * as FileSaver from 'file-saver';
+import Swal from 'sweetalert2';
+import { ProductService } from '../services/e-comm.service';
 
 interface Order {
   id: number;
-  customer: string;
+  customer: string; // This will be the email
+  customer_name?: string; // This will be the actual name from users table
+  customer_cellphone?: string; // This will be the cellphone from users table
+  cellphone?: string; // Keep this for backward compatibility
   product: string;
   quantity: number;
   price?: number; // Add price property
@@ -17,6 +22,10 @@ interface Order {
   vendor?: string; // Add vendor email field
   sellerEmail?: string; // Alternative field name for vendor
   created_at?: string; // Add created date
+  pickup_date?: string; // Add pickup date
+  remarks?: string; // Add remarks for declined orders
+  completion_remarks?: string; // Add completion remarks for completed orders
+  or_number?: string; // Add OR Number for completed orders
 }
 
 interface Product {
@@ -33,6 +42,7 @@ interface SalesAnalytics {
   totalRevenue: number;
   totalOrders: number;
   approvedOrders: number;
+  completedOrders: number;
   pendingOrders: number;
   averageOrderValue: number;
   topProducts: Array<{product: string, quantity: number, revenue: number}>;
@@ -92,6 +102,7 @@ export class AdminComponent implements OnInit {
     totalRevenue: 0,
     totalOrders: 0,
     approvedOrders: 0,
+    completedOrders: 0,
     pendingOrders: 0,
     averageOrderValue: 0,
     topProducts: [],
@@ -142,6 +153,10 @@ export class AdminComponent implements OnInit {
   
   // Chart view toggle
   chartView: 'daily' | 'monthly' = 'daily';
+ 
+  // Date range for reports
+  reportStartDate: string = '';
+  reportEndDate: string = '';
 
   // Order sorting properties
   sortField: string = 'id';
@@ -150,11 +165,28 @@ export class AdminComponent implements OnInit {
   searchTerm: string = '';
   statusFilter: string = 'all';
 
-  constructor(private http: HttpClient, private router: Router) {}
+  // Order details modal properties
+  showOrderModal: boolean = false;
+  selectedOrder: Order | null = null;
+
+  // OR Number modal properties
+  showOrNumberModal: boolean = false;
+  orNumber: string = '';
+  processingOrder: Order | null = null;
+
+  // Completion remarks modal properties
+  showRemarksModal: boolean = false;
+  completionRemarks: string = '';
+  remarksOrder: Order | null = null;
+
+  constructor(private http: HttpClient, private router: Router, private productService: ProductService) {}
 
   ngOnInit() {
     // Clean up old localStorage workaround data
     localStorage.removeItem('readyForPickupOrders');
+    
+    // Initialize date range for reports
+    this.initializeDateRange();
     
     this.fetchOrders();
     this.fetchProducts();
@@ -197,6 +229,179 @@ export class AdminComponent implements OnInit {
     this.calculateAnalytics(); // Recalculate for the new view
   }
 
+  // Get top products with their most sold size only
+  getTopProductsWithSizes() {
+    const productSizeMap: {[productName: string]: {
+      name: string;
+      totalQuantity: number;
+      totalRevenue: number;
+      sizes: Array<{size: string, quantity: number, revenue: number}>;
+    }} = {};
+
+    // Process orders to build product-size combinations
+    const filteredOrders = this.getFilteredOrdersByDate();
+    
+    filteredOrders.forEach(order => {
+      if ((order.status === 'approved' || order.status === 'ready-for-pickup' || order.status === 'completed') && order.size) {
+        const product = this.products.find(p => p.name === order.product);
+        const price = product?.price || 0;
+        const revenue = price * order.quantity;
+
+        if (!productSizeMap[order.product]) {
+          productSizeMap[order.product] = {
+            name: order.product,
+            totalQuantity: 0,
+            totalRevenue: 0,
+            sizes: []
+          };
+        }
+
+        // Update totals
+        productSizeMap[order.product].totalQuantity += order.quantity;
+        productSizeMap[order.product].totalRevenue += revenue;
+
+        // Find or create size entry
+        let sizeEntry = productSizeMap[order.product].sizes.find(s => s.size === order.size);
+        if (!sizeEntry) {
+          sizeEntry = { size: order.size, quantity: 0, revenue: 0 };
+          productSizeMap[order.product].sizes.push(sizeEntry);
+        }
+
+        sizeEntry.quantity += order.quantity;
+        sizeEntry.revenue += revenue;
+      }
+    });
+
+    // Sort products by revenue and return only the most sold size for each product
+    const result = Object.values(productSizeMap)
+      .sort((a, b) => b.totalRevenue - a.totalRevenue)
+      .slice(0, 5) // Top 5 products
+      .map(product => {
+        // Sort sizes by quantity (most sold first) and take only the top one
+        const mostSoldSize = product.sizes.sort((a, b) => b.quantity - a.quantity)[0];
+        
+        return {
+          ...product,
+          sizes: mostSoldSize ? [mostSoldSize] : [] // Return only the most sold size
+        };
+      });
+
+    return result;
+  }
+
+  // Get completed orders for the report
+  getCompletedOrders() {
+    let completedOrders = this.customerOrders.filter(order => order.status === 'completed');
+    
+    // Filter by date range if both start and end dates are provided
+    if (this.reportStartDate && this.reportEndDate) {
+      const startDate = new Date(this.reportStartDate);
+      const endDate = new Date(this.reportEndDate);
+      // Set end date to end of day for inclusive filtering
+      endDate.setHours(23, 59, 59, 999);
+      
+      completedOrders = completedOrders.filter(order => {
+        if (!order.created_at) return false;
+        const orderDate = new Date(order.created_at);
+        return orderDate >= startDate && orderDate <= endDate;
+      });
+    }
+    
+    return completedOrders;
+  }
+
+  // Get product price by name
+  getProductPrice(productName: string): number {
+    const product = this.products.find(p => p.name === productName);
+    return product ? parseFloat(product.price.toString()) : 0;
+  }
+
+  // Get product image by name
+  getProductImage(productName: string): string {
+    const product = this.products.find(p => p.name === productName);
+    return product ? product.image : '67e96269e8a71_gps logo.png'; // fallback to default image
+  }
+
+  // Get product description by name
+  getProductDescription(productName: string): string {
+    const product = this.products.find(p => p.name === productName);
+    return product ? product.description : 'No description available';
+  }
+
+  // Format order date for display
+  formatOrderDate(dateString: string): string {
+    if (!dateString) return 'N/A';
+    
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return 'Invalid Date';
+    
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+
+  // Get order date with fallback for different field names
+  getOrderDate(order: any): string {
+    // Try different possible date field names (including MySQL auto-generated ones)
+    const dateValue = order.created_at || 
+                     order.order_date || 
+                     order.purchase_date || 
+                     order.date_created || 
+                     order.timestamp ||
+                     order.date ||
+                     order.created_date ||
+                     order.order_time ||
+                     order.purchase_time ||
+                     order.datetime ||
+                     '';
+    
+    if (!dateValue) {
+      return 'Date not available';
+    }
+    
+    return this.formatOrderDate(dateValue);
+  }
+
+  // Date range change handler
+  onDateRangeChange() {
+    // Optional: Add validation or auto-apply logic here
+    if (this.reportStartDate && this.reportEndDate) {
+      // Ensure start date is not after end date
+      if (new Date(this.reportStartDate) > new Date(this.reportEndDate)) {
+        // Swap dates if start is after end
+        const temp = this.reportStartDate;
+        this.reportStartDate = this.reportEndDate;
+        this.reportEndDate = temp;
+      }
+    }
+  }
+
+  // Apply custom date range
+  applyDateRange() {
+    if (!this.reportStartDate || !this.reportEndDate) {
+      alert('Please select both start and end dates');
+      return;
+    }
+
+    // Set dateFilter to custom to trigger the custom date logic
+    this.dateFilter = 'all'; // Use 'all' as base and filter by custom dates
+    this.generateProfessionalReport();
+  }
+
+  // Initialize default date range (last 30 days)
+  initializeDateRange() {
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(endDate.getDate() - 30);
+
+    this.reportEndDate = endDate.toISOString().split('T')[0];
+    this.reportStartDate = startDate.toISOString().split('T')[0];
+  }
+
   // Helper method for headers
   private getHeaders(): HttpHeaders {
     const userEmail = localStorage.getItem('user_email');
@@ -237,7 +442,7 @@ private fetchYourProductsAndOrders(userEmail: string) {
   
   // Get your products first
   this.http.get<any>(
-    `https://api.localfit.store/ecomm_api/Router.php?request=products&seller=${encodeURIComponent(userEmail)}`,
+    `http://localhost:3001/api/products?seller=${encodeURIComponent(userEmail)}`,
     { 
       withCredentials: true,
       headers: this.getHeaders()
@@ -273,7 +478,7 @@ private fetchYourProductsAndOrders(userEmail: string) {
       
       // Now fetch orders
       this.http.get<any[]>(
-        `https://api.localfit.store/ecomm_api/Router.php?request=orders`,
+        `http://localhost:3001/api/orders`,
         { 
           withCredentials: true,
           headers: this.getHeaders()
@@ -353,10 +558,11 @@ private fetchYourProductsAndOrders(userEmail: string) {
       return;
     }
     
-    order.status = 'approved';
+    // Update to ready-for-pickup status instead of approved
+    order.status = 'ready-for-pickup';
     
     this.http.post(
-      `https://api.localfit.store/ecomm_api/Router.php?request=orders&admin=${encodeURIComponent(userEmail ?? '')}`,
+      `http://localhost:3001/api/orders?admin=${encodeURIComponent(userEmail ?? '')}`,
       { 
         action: 'approve', 
         orderId: order.id,
@@ -368,9 +574,15 @@ private fetchYourProductsAndOrders(userEmail: string) {
         headers: this.getHeaders()
       }
     ).subscribe({
-      next: () => {
-        console.log('Order approved successfully');
+      next: (response: any) => {
+        console.log('Order approved and set to ready for pickup successfully', response);
+        // Set pickup date if returned from API
+        if (response.pickup_date) {
+          order.pickup_date = response.pickup_date;
+        }
         this.fetchOrders(); // Refresh the orders list after approval
+        // Recalculate analytics to include approved order
+        this.calculateAnalytics();
       },
       error: (err) => {
         console.error('Approve order error:', err);
@@ -387,43 +599,122 @@ private fetchYourProductsAndOrders(userEmail: string) {
   }
 
   declineOrder(order: Order) {
+    // Show SweetAlert popup with text area for remarks
+    Swal.fire({
+      title: 'Decline Order',
+      text: 'Please provide a reason for declining this order:',
+      input: 'textarea',
+      inputLabel: 'Remarks',
+      inputPlaceholder: 'Enter the reason for declining this order...',
+      inputAttributes: {
+        'aria-label': 'Enter the reason for declining this order',
+        'maxlength': '500'
+      },
+      showCancelButton: true,
+      confirmButtonColor: '#dc3545',
+      cancelButtonColor: '#6c757d',
+      confirmButtonText: 'Decline Order',
+      cancelButtonText: 'Cancel',
+      inputValidator: (value) => {
+        if (!value || value.trim().length === 0) {
+          return 'Please provide a reason for declining this order!';
+        }
+        if (value.length > 500) {
+          return 'Remarks cannot exceed 500 characters!';
+        }
+        return null;
+      }
+    }).then((result) => {
+      if (result.isConfirmed && result.value) {
+        this.processOrderDecline(order, result.value.trim());
+      }
+    });
+  }
+
+  private processOrderDecline(order: Order, remarks: string) {
     const userEmail = localStorage.getItem('user_email');
     const token = localStorage.getItem('auth_token');
     
     if (!token) {
-      alert('Authentication token not found. Please login again.');
+      Swal.fire('Error', 'Authentication token not found. Please login again.', 'error');
       this.logout();
       return;
     }
     
+    // Update local order status optimistically
+    const originalStatus = order.status;
+    const originalRemarks = order.remarks;
     order.status = 'declined';
+    order.remarks = remarks;
     
     this.http.post(
-      `https://api.localfit.store/ecomm_api/Router.php?request=orders&admin=${encodeURIComponent(userEmail ?? '')}`,
+      `http://localhost:3001/api/orders?admin=${encodeURIComponent(userEmail ?? '')}`,
       { 
         action: 'decline', 
         orderId: order.id,
         adminEmail: userEmail,
-        token: token // Include token in request body as well
+        token: token,
+        remarks: remarks // Include remarks in the request
       },
       { 
         withCredentials: true,
-        headers: this.getHeaders()
+        headers: this.getHeaders(),
+        responseType: 'text' // Use text first to see raw response
       }
     ).subscribe({
-      next: () => {
-        console.log('Order declined successfully');
-        this.fetchOrders(); // Refresh the orders list after decline
+      next: (response: string) => {
+        console.log('Raw decline response:', response);
+        console.log('Response length:', response.length);
+        
+        try {
+          // Try to parse as JSON
+          const parsedResponse = JSON.parse(response);
+          console.log('Parsed response:', parsedResponse);
+          
+          if (parsedResponse && parsedResponse.success) {
+            console.log('Order declined successfully with remarks');
+            Swal.fire({
+              icon: 'success',
+              title: 'Order Declined',
+              text: 'The order has been declined with your remarks.',
+              timer: 2000,
+              showConfirmButton: false
+            });
+            this.fetchOrders(); // Refresh the orders list after decline
+            // Recalculate analytics to reflect declined order
+            this.calculateAnalytics();
+          } else {
+            console.error('Invalid response structure:', parsedResponse);
+            throw new Error('Invalid response from server');
+          }
+        } catch (parseError) {
+          console.error('JSON parse error:', parseError);
+          console.error('Response that failed to parse:', response);
+          throw new Error('Invalid JSON response from server');
+        }
       },
       error: (err) => {
         console.error('Decline order error:', err);
-        order.status = 'pending';
+        console.error('Error status:', err.status);
+        console.error('Error message:', err.message);
+        console.error('Error response:', err.error);
+        
+        // Revert optimistic updates on error
+        order.status = originalStatus;
+        order.remarks = originalRemarks;
         
         if (err.status === 401) {
-          alert('Session expired. Please login again.');
+          Swal.fire('Error', 'Session expired. Please login again.', 'error');
           this.logout();
+        } else if (err.status === 0) {
+          Swal.fire('Error', 'Network error. Please check your connection.', 'error');
+        } else if (err.status === 200 && err.statusText === 'Unknown Error') {
+          // This is likely a CORS or response parsing issue
+          console.log('Response headers:', err.headers);
+          Swal.fire('Info', 'Order decline may have succeeded. Refreshing data...', 'info');
+          this.fetchOrders(); // Try to refresh to see if it actually worked
         } else {
-          alert('Failed to decline order');
+          Swal.fire('Error', `Failed to decline order. Status: ${err.status}`, 'error');
         }
       }
     });
@@ -445,7 +736,7 @@ private fetchYourProductsAndOrders(userEmail: string) {
     
     // Call the backend API with the correct action
     this.http.post(
-      `https://api.localfit.store/ecomm_api/Router.php?request=orders&admin=${encodeURIComponent(userEmail ?? '')}`,
+      `http://localhost:3001/api/orders?admin=${encodeURIComponent(userEmail ?? '')}`,
       { 
         action: 'ready-for-pickup', 
         orderId: order.id
@@ -459,6 +750,8 @@ private fetchYourProductsAndOrders(userEmail: string) {
         console.log('Order marked as ready for pickup successfully', response);
         alert('Order marked as ready for pickup!');
         this.fetchOrders();
+        // Recalculate analytics to include updated order status
+        this.calculateAnalytics();
       },
       error: (err) => {
         console.error('Mark ready for pickup error:', err);
@@ -494,13 +787,256 @@ private fetchYourProductsAndOrders(userEmail: string) {
     FileSaver.saveAs(data, 'customer_orders.xlsx');
   }
 
+  // Export Order Management Report based on current filters
+  exportOrderManagementReport(): void {
+    // Use filtered orders based on current search term and status filter
+    const ordersToExport = this.filteredOrders;
+    
+    if (ordersToExport.length === 0) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'No Orders to Export',
+        text: 'No orders match the current filters. Please adjust your filters and try again.',
+        timer: 3000,
+        showConfirmButton: false
+      });
+      return;
+    }
+
+    // Create workbook for order management report
+    const workbook: XLSX.WorkBook = XLSX.utils.book_new();
+    
+    // Sheet 1: Order Management Summary
+    const currentDate = new Date().toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+    
+    const summaryData = [
+      { 'ORDER MANAGEMENT REPORT': '', ' ': '', '  ': '', '   ': '' },
+      { 'ORDER MANAGEMENT REPORT': 'ORDER MANAGEMENT REPORT', ' ': '', '  ': '', '   ': '' },
+      { 'ORDER MANAGEMENT REPORT': '', ' ': '', '  ': '', '   ': '' },
+      { 'ORDER MANAGEMENT REPORT': 'Generated Date:', ' ': currentDate, '  ': '', '   ': '' },
+      { 'ORDER MANAGEMENT REPORT': 'Applied Filters:', ' ': '', '  ': '', '   ': '' },
+      { 'ORDER MANAGEMENT REPORT': '  - Status Filter:', ' ': this.statusFilter === 'all' ? 'All Statuses' : this.statusFilter.toUpperCase(), '  ': '', '   ': '' },
+      { 'ORDER MANAGEMENT REPORT': '  - Search Term:', ' ': this.searchTerm || 'None', '  ': '', '   ': '' },
+      { 'ORDER MANAGEMENT REPORT': '  - Sort Field:', ' ': this.sortField, '  ': '', '   ': '' },
+      { 'ORDER MANAGEMENT REPORT': '  - Sort Direction:', ' ': this.sortDirection.toUpperCase(), '  ': '', '   ': '' },
+      { 'ORDER MANAGEMENT REPORT': '', ' ': '', '  ': '', '   ': '' },
+      { 'ORDER MANAGEMENT REPORT': 'SUMMARY STATISTICS', ' ': '', '  ': '', '   ': '' },
+      { 'ORDER MANAGEMENT REPORT': 'Total Orders (Filtered):', ' ': ordersToExport.length.toString(), '  ': '', '   ': '' },
+      { 'ORDER MANAGEMENT REPORT': 'Total Orders (All):', ' ': this.customerOrders.length.toString(), '  ': '', '   ': '' },
+      { 'ORDER MANAGEMENT REPORT': '', ' ': '', '  ': '', '   ': '' },
+      { 'ORDER MANAGEMENT REPORT': 'STATUS BREAKDOWN (Filtered Results)', ' ': '', '  ': '', '   ': '' },
+      { 'ORDER MANAGEMENT REPORT': 'Pending Orders:', ' ': ordersToExport.filter(o => o.status === 'pending').length.toString(), '  ': '', '   ': '' },
+      { 'ORDER MANAGEMENT REPORT': 'Approved Orders:', ' ': ordersToExport.filter(o => o.status === 'approved').length.toString(), '  ': '', '   ': '' },
+      { 'ORDER MANAGEMENT REPORT': 'Declined Orders:', ' ': ordersToExport.filter(o => o.status === 'declined').length.toString(), '  ': '', '   ': '' },
+      { 'ORDER MANAGEMENT REPORT': 'Ready for Pickup:', ' ': ordersToExport.filter(o => o.status === 'ready-for-pickup').length.toString(), '  ': '', '   ': '' },
+      { 'ORDER MANAGEMENT REPORT': 'Completed Orders:', ' ': ordersToExport.filter(o => o.status === 'completed').length.toString(), '  ': '', '   ': '' },
+      { 'ORDER MANAGEMENT REPORT': '', ' ': '', '  ': '', '   ': '' },
+      { 'ORDER MANAGEMENT REPORT': 'COMPLETION REMARKS STATISTICS', ' ': '', '  ': '', '   ': '' },
+      { 'ORDER MANAGEMENT REPORT': 'Orders with OR Numbers:', ' ': ordersToExport.filter(o => o.or_number && o.or_number.trim() !== '').length.toString(), '  ': '', '   ': '' },
+      { 'ORDER MANAGEMENT REPORT': 'Orders with Completion Remarks:', ' ': ordersToExport.filter(o => o.completion_remarks && o.completion_remarks.trim() !== '').length.toString(), '  ': '', '   ': '' },
+      { 'ORDER MANAGEMENT REPORT': 'Completed Orders with Remarks:', ' ': ordersToExport.filter(o => o.status === 'completed' && o.completion_remarks && o.completion_remarks.trim() !== '').length.toString(), '  ': '', '   ': '' },
+      { 'ORDER MANAGEMENT REPORT': '', ' ': '', '  ': '', '   ': '' }
+    ];
+    
+    const summarySheet = XLSX.utils.json_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(workbook, summarySheet, 'Report Summary');
+
+    // Sheet 2: Detailed Order List
+    const detailedOrdersData = [
+      { 'DETAILED ORDERS': '', ' ': '', '  ': '', '   ': '', '    ': '', '     ': '', '      ': '', '       ': '', '        ': '', '         ': '', '          ': '' },
+      { 'DETAILED ORDERS': 'Order #', ' ': 'Customer Name', '  ': 'Customer Email', '   ': 'Cellphone', '    ': 'Product', '     ': 'Size', '      ': 'Status', '       ': 'Order Date', '        ': 'Pickup Date', '         ': 'OR Number', '          ': 'Completion Remarks' },
+      ...ordersToExport.map(order => ({
+        'DETAILED ORDERS': `#${order.id}`,
+        ' ': order.customer_name || 'N/A',
+        '  ': order.customer || 'N/A',
+        '   ': order.customer_cellphone || order.cellphone || 'N/A',
+        '    ': order.product,
+        '     ': order.size || 'N/A',
+        '      ': order.status.toUpperCase(),
+        '       ': this.getOrderDate(order),
+        '        ': order.pickup_date ? new Date(order.pickup_date).toLocaleDateString('en-US') : 'N/A',
+        '         ': order.or_number || 'N/A',
+        '          ': order.completion_remarks || 'N/A'
+      }))
+    ];
+    
+    const ordersSheet = XLSX.utils.json_to_sheet(detailedOrdersData);
+    XLSX.utils.book_append_sheet(workbook, ordersSheet, 'Detailed Orders');
+
+    // Sheet 3: Status-wise Analysis
+    const statusAnalysisData = [
+      { 'STATUS ANALYSIS': '', ' ': '', '  ': '', '   ': '', '    ': '' },
+      { 'STATUS ANALYSIS': 'STATUS-WISE ANALYSIS', ' ': '', '  ': '', '   ': '', '    ': '' },
+      { 'STATUS ANALYSIS': '', ' ': '', '  ': '', '   ': '', '    ': '' },
+      { 'STATUS ANALYSIS': 'Status', ' ': 'Count', '  ': 'Percentage', '   ': 'Revenue (Est.)', '    ': 'Products' },
+    ];
+
+    const statusGroups = ['pending', 'approved', 'declined', 'ready-for-pickup', 'completed'];
+    const totalFiltered = ordersToExport.length;
+
+    statusGroups.forEach(status => {
+      const statusOrders = ordersToExport.filter(o => o.status === status);
+      const count = statusOrders.length;
+      const percentage = totalFiltered > 0 ? ((count / totalFiltered) * 100).toFixed(1) : '0.0';
+      const revenue = statusOrders.reduce((sum, order) => sum + this.getProductPrice(order.product), 0);
+      const uniqueProducts = [...new Set(statusOrders.map(o => o.product))].length;
+
+      statusAnalysisData.push({
+        'STATUS ANALYSIS': status.toUpperCase(),
+        ' ': count.toString(),
+        '  ': `${percentage}%`,
+        '   ': `₱${revenue.toFixed(2)}`,
+        '    ': uniqueProducts.toString()
+      });
+    });
+
+    const statusSheet = XLSX.utils.json_to_sheet(statusAnalysisData);
+    XLSX.utils.book_append_sheet(workbook, statusSheet, 'Status Analysis');
+
+    // Sheet 4: Product Performance (based on filtered orders)
+    const productPerformanceMap: {[product: string]: {
+      total: number,
+      pending: number,
+      approved: number,
+      declined: number,
+      readyPickup: number,
+      completed: number,
+      revenue: number
+    }} = {};
+
+    ordersToExport.forEach(order => {
+      if (!productPerformanceMap[order.product]) {
+        productPerformanceMap[order.product] = {
+          total: 0,
+          pending: 0,
+          approved: 0,
+          declined: 0,
+          readyPickup: 0,
+          completed: 0,
+          revenue: 0
+        };
+      }
+      
+      const productData = productPerformanceMap[order.product];
+      productData.total++;
+      productData.revenue += this.getProductPrice(order.product);
+      
+      switch (order.status) {
+        case 'pending': productData.pending++; break;
+        case 'approved': productData.approved++; break;
+        case 'declined': productData.declined++; break;
+        case 'ready-for-pickup': productData.readyPickup++; break;
+        case 'completed': productData.completed++; break;
+      }
+    });
+
+    const productPerformanceData = [
+      { 'PRODUCT PERFORMANCE': '', ' ': '', '  ': '', '   ': '', '    ': '', '     ': '', '      ': '', '       ': '', '        ': '' },
+      { 'PRODUCT PERFORMANCE': 'Product', ' ': 'Total Orders', '  ': 'Pending', '   ': 'Approved', '    ': 'Declined', '     ': 'Ready Pickup', '      ': 'Completed', '       ': 'Revenue', '        ': 'Success Rate' },
+      ...Object.entries(productPerformanceMap)
+        .sort(([,a], [,b]) => b.total - a.total)
+        .map(([product, data]) => {
+          const successRate = data.total > 0 ? (((data.approved + data.readyPickup + data.completed) / data.total) * 100).toFixed(1) : '0.0';
+          return {
+            'PRODUCT PERFORMANCE': product,
+            ' ': data.total.toString(),
+            '  ': data.pending.toString(),
+            '   ': data.approved.toString(),
+            '    ': data.declined.toString(),
+            '     ': data.readyPickup.toString(),
+            '      ': data.completed.toString(),
+            '       ': `₱${data.revenue.toFixed(2)}`,
+            '        ': `${successRate}%`
+          };
+        })
+    ];
+
+    const productSheet = XLSX.utils.json_to_sheet(productPerformanceData);
+    XLSX.utils.book_append_sheet(workbook, productSheet, 'Product Performance');
+
+    // Sheet 5: Completion Remarks (for completed orders with remarks)
+    const completedOrdersWithRemarks = ordersToExport.filter(order => 
+      order.status === 'completed' && order.completion_remarks && order.completion_remarks.trim() !== ''
+    );
+    
+    const completionRemarksData = [
+      { 'COMPLETION REMARKS': '', ' ': '', '  ': '', '   ': '', '    ': '', '     ': '' },
+      { 'COMPLETION REMARKS': 'COMPLETION REMARKS REPORT', ' ': '', '  ': '', '   ': '', '    ': '', '     ': '' },
+      { 'COMPLETION REMARKS': '', ' ': '', '  ': '', '   ': '', '    ': '', '     ': '' },
+      { 'COMPLETION REMARKS': `Total Completed Orders: ${ordersToExport.filter(o => o.status === 'completed').length}`, ' ': '', '  ': '', '   ': '', '    ': '', '     ': '' },
+      { 'COMPLETION REMARKS': `Orders with Remarks: ${completedOrdersWithRemarks.length}`, ' ': '', '  ': '', '   ': '', '    ': '', '     ': '' },
+      { 'COMPLETION REMARKS': '', ' ': '', '  ': '', '   ': '', '    ': '', '     ': '' },
+      { 'COMPLETION REMARKS': 'Order #', ' ': 'Customer', '  ': 'Product', '   ': 'OR Number', '    ': 'Completion Date', '     ': 'Completion Remarks' },
+      ...completedOrdersWithRemarks.map(order => ({
+        'COMPLETION REMARKS': `#${order.id}`,
+        ' ': order.customer_name || order.customer || 'N/A',
+        '  ': order.product,
+        '   ': order.or_number || 'N/A',
+        '    ': this.getOrderDate(order),
+        '     ': order.completion_remarks || 'N/A'
+      }))
+    ];
+
+    // Add message if no completion remarks found
+    if (completedOrdersWithRemarks.length === 0) {
+      completionRemarksData.push({
+        'COMPLETION REMARKS': 'No completed orders with remarks found in the current filter.',
+        ' ': '',
+        '  ': '',
+        '   ': '',
+        '    ': '',
+        '     ': ''
+      });
+    }
+
+    const remarksSheet = XLSX.utils.json_to_sheet(completionRemarksData);
+    XLSX.utils.book_append_sheet(workbook, remarksSheet, 'Completion Remarks');
+
+    // Apply formatting to all sheets
+    [summarySheet, ordersSheet, statusSheet, productSheet, remarksSheet].forEach(sheet => {
+      this.formatExcelSheet(sheet);
+    });
+
+    // Generate filename based on filters
+    let filename = 'Order_Management_Report';
+    if (this.statusFilter !== 'all') {
+      filename += `_${this.statusFilter.toUpperCase()}`;
+    }
+    if (this.searchTerm) {
+      filename += `_Search_${this.searchTerm.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    }
+    filename += `_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+    // Generate and download the file
+    const excelBuffer: any = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+    const data: Blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    FileSaver.saveAs(data, filename);
+
+    // Show success message
+    const completedWithRemarks = ordersToExport.filter(o => 
+      o.status === 'completed' && o.completion_remarks && o.completion_remarks.trim() !== ''
+    ).length;
+    
+    Swal.fire({
+      icon: 'success',
+      title: 'Report Generated!',
+      text: `Order management report generated successfully with ${ordersToExport.length} orders across 5 sheets. ${completedWithRemarks} completed orders include completion remarks.`,
+      timer: 4000,
+      showConfirmButton: false
+    });
+  }
+
   // Fetch products for analytics
   fetchProducts() {
     const userEmail = localStorage.getItem('user_email');
     if (!userEmail) return;
 
     this.http.get<any>(
-      `https://api.localfit.store/ecomm_api/Router.php?request=products&seller=${encodeURIComponent(userEmail)}`,
+      `http://localhost:3001/api/products?seller=${encodeURIComponent(userEmail)}`,
       { 
         withCredentials: true,
         headers: this.getHeaders()
@@ -526,6 +1062,7 @@ private fetchYourProductsAndOrders(userEmail: string) {
         totalRevenue: 0,
         totalOrders: 0,
         approvedOrders: 0,
+        completedOrders: 0,
         pendingOrders: 0,
         averageOrderValue: 0,
         topProducts: [],
@@ -545,22 +1082,29 @@ private fetchYourProductsAndOrders(userEmail: string) {
     
     // Basic metrics
     this.analytics.totalOrders = filteredOrders.length;
-    this.analytics.approvedOrders = filteredOrders.filter(o => o.status === 'approved').length;
+    this.analytics.approvedOrders = filteredOrders.filter(o => 
+      o.status === 'approved' || o.status === 'ready-for-pickup' || o.status === 'completed'
+    ).length;
+    this.analytics.completedOrders = filteredOrders.filter(o => o.status === 'completed').length;
     this.analytics.pendingOrders = filteredOrders.filter(o => o.status === 'pending').length;
     
-    // Calculate revenue (need to match with product prices)
+    // Calculate revenue (include approved, ready-for-pickup, and completed orders)
     let totalRevenue = 0;
-    filteredOrders.forEach(order => {
-      if (order.status === 'approved') {
-        const product = this.products.find(p => p.name === order.product);
-        const price = product?.price || 0;
-        totalRevenue += price * order.quantity;
-      }
+    const revenueGeneratingOrders = filteredOrders.filter(order => 
+      order.status === 'approved' || 
+      order.status === 'ready-for-pickup' || 
+      order.status === 'completed'
+    );
+    
+    revenueGeneratingOrders.forEach(order => {
+      const product = this.products.find(p => p.name === order.product);
+      const price = product?.price || 0;
+      totalRevenue += price * order.quantity;
     });
     
     this.analytics.totalRevenue = totalRevenue;
-    this.analytics.averageOrderValue = this.analytics.approvedOrders > 0 
-      ? totalRevenue / this.analytics.approvedOrders 
+    this.analytics.averageOrderValue = revenueGeneratingOrders.length > 0 
+      ? totalRevenue / revenueGeneratingOrders.length 
       : 0;
 
     // Calculate analytics
@@ -608,7 +1152,7 @@ private fetchYourProductsAndOrders(userEmail: string) {
     const productStats: {[key: string]: {quantity: number, revenue: number}} = {};
     
     orders.forEach(order => {
-      if (order.status === 'approved') {
+      if (order.status === 'approved' || order.status === 'ready-for-pickup' || order.status === 'completed') {
         const product = this.products.find(p => p.name === order.product);
         const price = product?.price || 0;
         const revenue = price * order.quantity;
@@ -648,7 +1192,7 @@ private fetchYourProductsAndOrders(userEmail: string) {
     
     // Fill in actual data
     orders.forEach(order => {
-      if (order.status === 'approved') {
+      if (order.status === 'approved' || order.status === 'ready-for-pickup' || order.status === 'completed') {
         const product = this.products.find(p => p.name === order.product);
         const price = product?.price || 0;
         const revenue = price * order.quantity;
@@ -689,7 +1233,7 @@ private fetchYourProductsAndOrders(userEmail: string) {
     
     // Fill in actual data
     orders.forEach(order => {
-      if (order.status === 'approved') {
+      if (order.status === 'approved' || order.status === 'ready-for-pickup' || order.status === 'completed') {
         const product = this.products.find(p => p.name === order.product);
         const price = product?.price || 0;
         const revenue = price * order.quantity;
@@ -861,7 +1405,7 @@ private fetchYourProductsAndOrders(userEmail: string) {
     const sizeStats: {[key: string]: {quantity: number, revenue: number}} = {};
     
     orders.forEach(order => {
-      if (order.status === 'approved' && order.size) {
+      if ((order.status === 'approved' || order.status === 'ready-for-pickup' || order.status === 'completed') && order.size) {
         const product = this.products.find(p => p.name === order.product);
         const price = product?.price || 0;
         const revenue = price * order.quantity;
@@ -891,7 +1435,7 @@ private fetchYourProductsAndOrders(userEmail: string) {
     const monthlyStats: {[key: string]: number} = {};
     
     orders.forEach(order => {
-      if (order.status === 'approved') {
+      if (order.status === 'approved' || order.status === 'ready-for-pickup' || order.status === 'completed') {
         const product = this.products.find(p => p.name === order.product);
         const price = product?.price || 0;
         const revenue = price * order.quantity;
@@ -1180,6 +1724,23 @@ private fetchYourProductsAndOrders(userEmail: string) {
   }
 
   private getReportPeriodText(): string {
+    // If custom date range is set, display the actual dates
+    if (this.reportStartDate && this.reportEndDate) {
+      const startDate = new Date(this.reportStartDate);
+      const endDate = new Date(this.reportEndDate);
+      
+      const formatDate = (date: Date) => {
+        return date.toLocaleDateString('en-US', { 
+          year: 'numeric', 
+          month: 'short', 
+          day: 'numeric' 
+        });
+      };
+      
+      return `${formatDate(startDate)} - ${formatDate(endDate)}`;
+    }
+    
+    // Fallback to predefined periods
     const periods = {
       'today': 'Today',
       'week': 'Last 7 Days',
@@ -1191,24 +1752,41 @@ private fetchYourProductsAndOrders(userEmail: string) {
   }
 
   private generateExecutiveSummary() {
+    const completedOrders = this.getCompletedOrders();
     const keyFindings = [];
+    
+    // Calculate total revenue from completed orders in the selected period
+    const totalRevenue = completedOrders.reduce((sum, order) => {
+      return sum + this.getProductPrice(order.product) * order.quantity;
+    }, 0);
+    
+    const totalCompletedOrders = completedOrders.length;
     const growthRate = parseFloat(this.getWeekOverWeekGrowth());
     
-    // Generate key findings based on data
-    if (this.analytics.totalRevenue > 0) {
-      keyFindings.push(`Generated ₱${this.analytics.totalRevenue.toLocaleString()} in total revenue`);
+    // Generate key findings based on completed orders data
+    if (totalRevenue > 0) {
+      keyFindings.push(`Generated ₱${totalRevenue.toLocaleString()} in total revenue from completed orders`);
     }
     
-    if (this.analytics.totalOrders > 0) {
-      keyFindings.push(`Processed ${this.analytics.totalOrders} orders with ${this.analytics.approvedOrders} approved`);
+    if (totalCompletedOrders > 0) {
+      keyFindings.push(`Completed ${totalCompletedOrders} orders in the selected period`);
     }
     
-    if (this.analytics.peakSalesDay) {
-      keyFindings.push(`Best performing day: ${this.formatDate(this.analytics.peakSalesDay.date)} (₱${this.analytics.peakSalesDay.revenue.toLocaleString()})`);
+    // Calculate average order value for completed orders
+    const avgOrderValue = totalCompletedOrders > 0 ? totalRevenue / totalCompletedOrders : 0;
+    if (avgOrderValue > 0) {
+      keyFindings.push(`Average order value: ₱${avgOrderValue.toFixed(2)}`);
     }
     
-    if (this.analytics.topProducts.length > 0) {
-      keyFindings.push(`Top product: ${this.analytics.topProducts[0].product} with ${this.analytics.topProducts[0].quantity} sales`);
+    // Find best selling product in completed orders
+    const productSales: {[key: string]: number} = {};
+    completedOrders.forEach(order => {
+      productSales[order.product] = (productSales[order.product] || 0) + order.quantity;
+    });
+    
+    const bestProduct = Object.entries(productSales).sort(([,a], [,b]) => b - a)[0];
+    if (bestProduct) {
+      keyFindings.push(`Best selling product: ${bestProduct[0]} with ${bestProduct[1]} sales`);
     }
     
     if (growthRate > 0) {
@@ -1217,16 +1795,16 @@ private fetchYourProductsAndOrders(userEmail: string) {
       keyFindings.push(`Declining trend: ${Math.abs(growthRate)}% decrease week-over-week`);
     }
 
-    // Determine performance rating
+    // Determine performance rating based on completed orders
     let performanceRating: 'Excellent' | 'Good' | 'Average' | 'Needs Improvement' = 'Average';
-    if (growthRate > 20) performanceRating = 'Excellent';
-    else if (growthRate > 10) performanceRating = 'Good';
-    else if (growthRate < -10) performanceRating = 'Needs Improvement';
+    if (totalCompletedOrders > 50 && avgOrderValue > 1000) performanceRating = 'Excellent';
+    else if (totalCompletedOrders > 20 && avgOrderValue > 500) performanceRating = 'Good';
+    else if (totalCompletedOrders < 5) performanceRating = 'Needs Improvement';
 
     return {
       keyFindings,
-      totalRevenue: this.analytics.totalRevenue,
-      totalOrders: this.analytics.totalOrders,
+      totalRevenue: totalRevenue,
+      totalOrders: totalCompletedOrders,
       growthRate,
       performanceRating
     };
@@ -1460,207 +2038,157 @@ private fetchYourProductsAndOrders(userEmail: string) {
 
   // Export professional report with charts
   exportProfessionalReport() {
-    // Create workbook with multiple sheets
+    this.exportSalesReportData();
+  }
+
+  // Export sales report data - matches what's displayed in the sales report view
+  exportSalesReportData() {
+    // Get the completed orders that are displayed in the report
+    const completedOrders = this.getCompletedOrders();
+    
+    // Filter orders based on the selected date range if custom dates are set
+    let filteredOrders = completedOrders;
+    if (this.reportStartDate && this.reportEndDate) {
+      const startDate = new Date(this.reportStartDate);
+      const endDate = new Date(this.reportEndDate);
+      endDate.setHours(23, 59, 59, 999); // Include the entire end date
+      
+      filteredOrders = completedOrders.filter(order => {
+        if (!order.created_at) return false;
+        const orderDate = new Date(order.created_at);
+        return orderDate >= startDate && orderDate <= endDate;
+      });
+    }
+
+    // Create workbook with sales report data
     const workbook: XLSX.WorkBook = XLSX.utils.book_new();
     
-    // Sheet 1: Executive Summary
-    const executiveSummaryData = [
-      { 'PROFESSIONAL SALES REPORT': '', ' ': '', '  ': '', '   ': '' },
-      { 'PROFESSIONAL SALES REPORT': '', ' ': '', '  ': '', '   ': '' },
-      { 'PROFESSIONAL SALES REPORT': 'Generated Date:', ' ': this.report.generatedDate, '  ': '', '   ': '' },
-      { 'PROFESSIONAL SALES REPORT': 'Report Period:', ' ': this.report.reportPeriod, '  ': '', '   ': '' },
-      { 'PROFESSIONAL SALES REPORT': 'Performance Rating:', ' ': this.report.executiveSummary.performanceRating, '  ': '', '   ': '' },
-      { 'PROFESSIONAL SALES REPORT': '', ' ': '', '  ': '', '   ': '' },
-      { 'PROFESSIONAL SALES REPORT': 'EXECUTIVE SUMMARY METRICS', ' ': '', '  ': '', '   ': '' },
-      { 'PROFESSIONAL SALES REPORT': 'Total Revenue:', ' ': `₱${this.report.executiveSummary.totalRevenue.toLocaleString()}`, '  ': '', '   ': '' },
-      { 'PROFESSIONAL SALES REPORT': 'Total Orders:', ' ': this.report.executiveSummary.totalOrders.toString(), '  ': '', '   ': '' },
-      { 'PROFESSIONAL SALES REPORT': 'Growth Rate:', ' ': `${this.report.executiveSummary.growthRate}%`, '  ': '', '   ': '' },
-      { 'PROFESSIONAL SALES REPORT': 'Avg Order Value:', ' ': `₱${this.analytics.averageOrderValue.toFixed(2)}`, '  ': '', '   ': '' },
-      { 'PROFESSIONAL SALES REPORT': 'Approval Rate:', ' ': `${this.analytics.totalOrders > 0 ? ((this.analytics.approvedOrders / this.analytics.totalOrders) * 100).toFixed(1) : 0}%`, '  ': '', '   ': '' },
-      { 'PROFESSIONAL SALES REPORT': '', ' ': '', '  ': '', '   ': '' },
-      { 'PROFESSIONAL SALES REPORT': 'KEY FINDINGS', ' ': '', '  ': '', '   ': '' },
-      ...this.report.executiveSummary.keyFindings.map(finding => ({ 
-        'PROFESSIONAL SALES REPORT': '•', ' ': finding, '  ': '', '   ': '' 
-      }))
+    // Sheet 1: Sales Report Summary
+    const reportSummaryData = [
+      { 'SALES REPORT': '', ' ': '', '  ': '', '   ': '' },
+      { 'SALES REPORT': 'SALES REPORT SUMMARY', ' ': '', '  ': '', '   ': '' },
+      { 'SALES REPORT': '', ' ': '', '  ': '', '   ': '' },
+      { 'SALES REPORT': 'Generated Date:', ' ': this.report.generatedDate, '  ': '', '   ': '' },
+      { 'SALES REPORT': 'Report Period:', ' ': this.report.reportPeriod, '  ': '', '   ': '' },
+      { 'SALES REPORT': 'Date Range:', ' ': this.reportStartDate && this.reportEndDate ? `${this.reportStartDate} to ${this.reportEndDate}` : 'All Time', '  ': '', '   ': '' },
+      { 'SALES REPORT': '', ' ': '', '  ': '', '   ': '' },
+      { 'SALES REPORT': 'EXECUTIVE SUMMARY', ' ': '', '  ': '', '   ': '' },
+      { 'SALES REPORT': 'Total Revenue:', ' ': `₱${this.report.executiveSummary.totalRevenue.toLocaleString()}`, '  ': '', '   ': '' },
+      { 'SALES REPORT': 'Total Completed Orders:', ' ': filteredOrders.length.toString(), '  ': '', '   ': '' },
+      { 'SALES REPORT': 'All Orders (Total):', ' ': this.report.executiveSummary.totalOrders.toString(), '  ': '', '   ': '' },
+      { 'SALES REPORT': 'Average Order Value:', ' ': `₱${filteredOrders.length > 0 ? (filteredOrders.reduce((sum, order) => sum + this.getProductPrice(order.product), 0) / filteredOrders.length).toFixed(2) : '0.00'}`, '  ': '', '   ': '' },
+      { 'SALES REPORT': '', ' ': '', '  ': '', '   ': '' }
     ];
     
-    const summarySheet = XLSX.utils.json_to_sheet(executiveSummaryData);
-    XLSX.utils.book_append_sheet(workbook, summarySheet, 'Executive Summary');
+    const summarySheet = XLSX.utils.json_to_sheet(reportSummaryData);
+    XLSX.utils.book_append_sheet(workbook, summarySheet, 'Report Summary');
 
-    // Sheet 2: Daily Sales Data with Chart Data
-    const chartDataForExcel = [
-      { 'DAILY SALES CHART DATA': '', ' ': '', '  ': '', '   ': '', '    ': '' },
-      { 'DAILY SALES CHART DATA': 'Date', ' ': 'Day', '  ': 'Revenue', '   ': 'Orders', '    ': 'Performance' },
-      ...this.report.dataTable.map(row => ({
-        'DAILY SALES CHART DATA': row.Date,
-        ' ': row.Day,
-        '  ': parseFloat(row.Revenue.replace('₱', '').replace(',', '')),
-        '   ': row.Orders,
-        '    ': row.Performance
+    // Sheet 2: Completed Orders (Main Data) - Each size as separate row
+    const completedOrdersData = [
+      { 'COMPLETED ORDERS': '', ' ': '', '  ': '', '   ': '', '    ': '', '     ': '' },
+      { 'COMPLETED ORDERS': 'Order #', ' ': 'Product Name', '  ': 'Size', '   ': 'Price', '    ': 'OR Number', '     ': 'Date Completed' },
+      ...filteredOrders.map(order => ({
+        'COMPLETED ORDERS': `#${order.id}`,
+        ' ': order.product,
+        '  ': order.size || 'N/A',
+        '   ': `₱${this.getProductPrice(order.product).toFixed(2)}`,
+        '    ': order.or_number || 'N/A',
+        '     ': this.getOrderDate(order)
       })),
-      { 'DAILY SALES CHART DATA': '', ' ': '', '  ': '', '   ': '', '    ': '' },
-      { 'DAILY SALES CHART DATA': 'CHART SUMMARY', ' ': '', '  ': '', '   ': '', '    ': '' },
-      { 'DAILY SALES CHART DATA': 'Peak Day:', ' ': this.analytics.peakSalesDay ? this.formatDate(this.analytics.peakSalesDay.date) : 'N/A', '  ': this.analytics.peakSalesDay ? this.analytics.peakSalesDay.revenue : 0, '   ': '', '    ': '' },
-      { 'DAILY SALES CHART DATA': 'Average Daily:', ' ': '', '  ': this.analytics.dailySales.length > 0 ? (this.analytics.totalRevenue / this.analytics.dailySales.length) : 0, '   ': '', '    ': '' },
-      { 'DAILY SALES CHART DATA': 'Active Days:', ' ': `${this.getActiveDaysCount()}/${this.analytics.dailySales.length}`, '  ': '', '   ': '', '    ': '' },
-      { 'DAILY SALES CHART DATA': 'Growth Rate:', ' ': `${this.getWeekOverWeekGrowth()}%`, '  ': '', '   ': '', '    ': '' }
+      { 'COMPLETED ORDERS': '', ' ': '', '  ': '', '   ': '', '    ': '', '     ': '' },
+      { 'COMPLETED ORDERS': 'TOTALS', ' ': '', '  ': '', '   ': '', '    ': '', '     ': '' },
+      { 'COMPLETED ORDERS': 'Total Orders:', ' ': filteredOrders.length.toString(), '  ': '', '   ': '', '    ': '', '     ': '' },
+      { 'COMPLETED ORDERS': 'Total Revenue:', ' ': `₱${filteredOrders.reduce((sum, order) => sum + this.getProductPrice(order.product), 0).toFixed(2)}`, '  ': '', '   ': '', '    ': '', '     ': '' },
+      { 'COMPLETED ORDERS': 'Date Range:', ' ': this.reportStartDate && this.reportEndDate ? `${this.reportStartDate} to ${this.reportEndDate}` : 'All Time', '  ': '', '   ': '', '    ': '', '     ': '' }
     ];
     
-    const dailySalesSheet = XLSX.utils.json_to_sheet(chartDataForExcel);
-    XLSX.utils.book_append_sheet(workbook, dailySalesSheet, 'Daily Sales Chart');
+    const ordersSheet = XLSX.utils.json_to_sheet(completedOrdersData);
+    XLSX.utils.book_append_sheet(workbook, ordersSheet, 'Completed Orders');
 
-    // Sheet 3: Product Performance Chart Data
-    const productChartData = [
-      { 'PRODUCT PERFORMANCE CHART': '', ' ': '', '  ': '', '   ': '' },
-      { 'PRODUCT PERFORMANCE CHART': 'Product Name', ' ': 'Quantity Sold', '  ': 'Revenue', '   ': 'Percentage' },
-      ...this.analytics.topProducts.map((product, index) => ({
-        'PRODUCT PERFORMANCE CHART': product.product,
-        ' ': product.quantity,
-        '  ': product.revenue,
-        '   ': this.analytics.totalRevenue > 0 ? ((product.revenue / this.analytics.totalRevenue) * 100).toFixed(1) + '%' : '0%'
-      })),
-      { 'PRODUCT PERFORMANCE CHART': '', ' ': '', '  ': '', '   ': '' },
-      { 'PRODUCT PERFORMANCE CHART': 'PRODUCT INSIGHTS', ' ': '', '  ': '', '   ': '' },
-      { 'PRODUCT PERFORMANCE CHART': 'Top Product:', ' ': this.analytics.topProducts[0]?.product || 'N/A', '  ': this.analytics.topProducts[0]?.revenue || 0, '   ': '' },
-      { 'PRODUCT PERFORMANCE CHART': 'Total Products:', ' ': this.analytics.topProducts.length.toString(), '  ': '', '   ': '' },
-      { 'PRODUCT PERFORMANCE CHART': 'Avg Revenue/Product:', ' ': '', '  ': this.analytics.topProducts.length > 0 ? (this.analytics.totalRevenue / this.analytics.topProducts.length) : 0, '   ': '' }
+    // Sheet 3: Product-Size Summary (Each size as separate entry)
+    const productSizeSummary: {[key: string]: {count: number, revenue: number, orNumbers: string[]}} = {};
+    
+    filteredOrders.forEach(order => {
+      const productSizeKey = `${order.product} - ${order.size || 'No Size'}`;
+      if (!productSizeSummary[productSizeKey]) {
+        productSizeSummary[productSizeKey] = {count: 0, revenue: 0, orNumbers: []};
+      }
+      productSizeSummary[productSizeKey].count++;
+      productSizeSummary[productSizeKey].revenue += this.getProductPrice(order.product);
+      if (order.or_number && !productSizeSummary[productSizeKey].orNumbers.includes(order.or_number)) {
+        productSizeSummary[productSizeKey].orNumbers.push(order.or_number);
+      }
+    });
+
+    const productSummaryData = [
+      { 'PRODUCT-SIZE SUMMARY': '', ' ': '', '  ': '', '   ': '', '    ': '', '     ': '' },
+      { 'PRODUCT-SIZE SUMMARY': 'Product - Size', ' ': 'Orders Count', '  ': 'Total Revenue', '   ': 'Avg Price', '    ': 'OR Numbers', '     ': 'Revenue %' },
+      ...Object.entries(productSizeSummary)
+        .sort(([,a], [,b]) => b.revenue - a.revenue)
+        .map(([productSize, data]) => {
+          const totalRevenue = filteredOrders.reduce((sum, order) => sum + this.getProductPrice(order.product), 0);
+          const revenuePercentage = totalRevenue > 0 ? ((data.revenue / totalRevenue) * 100).toFixed(1) : '0.0';
+          return {
+            'PRODUCT-SIZE SUMMARY': productSize,
+            ' ': data.count.toString(),
+            '  ': `₱${data.revenue.toFixed(2)}`,
+            '   ': `₱${(data.revenue / data.count).toFixed(2)}`,
+            '    ': data.orNumbers.join(', ') || 'N/A',
+            '     ': `${revenuePercentage}%`
+          };
+        }),
+      { 'PRODUCT-SIZE SUMMARY': '', ' ': '', '  ': '', '   ': '', '    ': '', '     ': '' },
+      { 'PRODUCT-SIZE SUMMARY': 'SUMMARY', ' ': '', '  ': '', '   ': '', '    ': '', '     ': '' },
+      { 'PRODUCT-SIZE SUMMARY': 'Total Product-Size Combinations:', ' ': Object.keys(productSizeSummary).length.toString(), '  ': '', '   ': '', '    ': '', '     ': '' },
+      { 'PRODUCT-SIZE SUMMARY': 'Best Selling Combination:', ' ': Object.entries(productSizeSummary).sort(([,a], [,b]) => b.count - a.count)[0]?.[0] || 'N/A', '  ': '', '   ': '', '    ': '', '     ': '' },
+      { 'PRODUCT-SIZE SUMMARY': 'Highest Revenue Combination:', ' ': Object.entries(productSizeSummary).sort(([,a], [,b]) => b.revenue - a.revenue)[0]?.[0] || 'N/A', '  ': '', '   ': '', '    ': '', '     ': '' },
+      { 'PRODUCT-SIZE SUMMARY': 'Total OR Numbers Issued:', ' ': [...new Set(filteredOrders.filter(o => o.or_number).map(o => o.or_number))].length.toString(), '  ': '', '   ': '', '    ': '', '     ': '' }
     ];
     
-    const productSheet = XLSX.utils.json_to_sheet(productChartData);
-    XLSX.utils.book_append_sheet(workbook, productSheet, 'Product Chart');
+    const productSheet = XLSX.utils.json_to_sheet(productSummaryData);
+    XLSX.utils.book_append_sheet(workbook, productSheet, 'Product-Size Summary');
 
-    // Sheet 4: Size Distribution Chart Data
-    if (this.analytics.sizeSales.length > 0) {
-      const sizeChartData = [
-        { 'SIZE DISTRIBUTION CHART': '', ' ': '', '  ': '', '   ': '' },
-        { 'SIZE DISTRIBUTION CHART': 'Size', ' ': 'Quantity', '  ': 'Revenue', '   ': 'Percentage' },
-        ...this.analytics.sizeSales.map(size => ({
-          'SIZE DISTRIBUTION CHART': size.size,
-          ' ': size.quantity,
-          '  ': size.revenue,
-          '   ': this.analytics.sizeSales.reduce((sum, s) => sum + s.quantity, 0) > 0 ? 
-                 ((size.quantity / this.analytics.sizeSales.reduce((sum, s) => sum + s.quantity, 0)) * 100).toFixed(1) + '%' : '0%'
+    // Sheet 4: OR Number Tracking
+    const orNumberData = [
+      { 'OR NUMBER TRACKING': '', ' ': '', '  ': '', '   ': '', '    ': '' },
+      { 'OR NUMBER TRACKING': 'OR Number', ' ': 'Order #', '  ': 'Product - Size', '   ': 'Amount', '    ': 'Date Completed' },
+      ...filteredOrders
+        .filter(order => order.or_number)
+        .sort((a, b) => (a.or_number || '').localeCompare(b.or_number || ''))
+        .map(order => ({
+          'OR NUMBER TRACKING': order.or_number,
+          ' ': `#${order.id}`,
+          '  ': `${order.product} - ${order.size || 'No Size'}`,
+          '   ': `₱${this.getProductPrice(order.product).toFixed(2)}`,
+          '    ': this.getOrderDate(order)
         })),
-        { 'SIZE DISTRIBUTION CHART': '', ' ': '', '  ': '', '   ': '' },
-        { 'SIZE DISTRIBUTION CHART': 'SIZE INSIGHTS', ' ': '', '  ': '', '   ': '' },
-        { 'SIZE DISTRIBUTION CHART': 'Most Popular Size:', ' ': this.analytics.sizeSales[0]?.size || 'N/A', '  ': this.analytics.sizeSales[0]?.quantity || 0, '   ': '' },
-        { 'SIZE DISTRIBUTION CHART': 'Total Sizes Available:', ' ': this.analytics.sizeSales.length.toString(), '  ': '', '   ': '' }
-      ];
-      
-      const sizeSheet = XLSX.utils.json_to_sheet(sizeChartData);
-      XLSX.utils.book_append_sheet(workbook, sizeSheet, 'Size Distribution');
-    }
-
-    // Sheet 5: Monthly Trend Chart Data
-    if (this.analytics.monthlySales.length > 0) {
-      const monthlyChartData = [
-        { 'MONTHLY TREND CHART': '', ' ': '', '  ': '', '   ': '' },
-        { 'MONTHLY TREND CHART': 'Month/Period', ' ': 'Revenue', '  ': 'Orders', '   ': 'Avg Order Value' },
-        ...this.analytics.monthlySales.map(month => ({
-          'MONTHLY TREND CHART': month.period,
-          ' ': month.revenue,
-          '  ': month.orders,
-          '   ': month.orders > 0 ? (month.revenue / month.orders).toFixed(2) : 0
-        })),
-        { 'MONTHLY TREND CHART': '', ' ': '', '  ': '', '   ': '' },
-        { 'MONTHLY TREND CHART': 'MONTHLY INSIGHTS', ' ': '', '  ': '', '   ': '' },
-        { 'MONTHLY TREND CHART': 'Best Month:', ' ': this.analytics.peakSalesMonth ? this.analytics.peakSalesMonth.month : 'N/A', '  ': this.analytics.peakSalesMonth ? this.analytics.peakSalesMonth.revenue : 0, '   ': '' },
-        { 'MONTHLY TREND CHART': 'Average Monthly Revenue:', ' ': '', '  ': this.analytics.monthlySales.length > 0 ? (this.analytics.totalRevenue / this.analytics.monthlySales.length) : 0, '   ': '' }
-      ];
-      
-      const monthlySheet = XLSX.utils.json_to_sheet(monthlyChartData);
-      XLSX.utils.book_append_sheet(workbook, monthlySheet, 'Monthly Trend');
-    }
-
-    // Sheet 6: Performance Analytics & Chart Instructions
-    const analyticsData = [
-      { 'PERFORMANCE ANALYTICS': '', ' ': '', '  ': '', '   ': '' },
-      { 'PERFORMANCE ANALYTICS': 'PERFORMANCE METRICS', ' ': '', '  ': '', '   ': '' },
-      { 'PERFORMANCE ANALYTICS': 'Sales Consistency:', ' ': `${this.getSalesConsistency().toFixed(1)}%`, '  ': '', '   ': '' },
-      { 'PERFORMANCE ANALYTICS': 'Current Sales Streak:', ' ': `${this.getCurrentSalesStreak()} days`, '  ': '', '   ': '' },
-      { 'PERFORMANCE ANALYTICS': 'Longest Sales Streak:', ' ': `${this.getLongestSalesStreak()} days`, '  ': '', '   ': '' },
-      { 'PERFORMANCE ANALYTICS': 'Week-over-Week Growth:', ' ': `${this.getWeekOverWeekGrowth()}%`, '  ': '', '   ': '' },
-      { 'PERFORMANCE ANALYTICS': '', ' ': '', '  ': '', '   ': '' },
-      { 'PERFORMANCE ANALYTICS': 'HOW TO CREATE CHARTS IN EXCEL', ' ': '', '  ': '', '   ': '' },
-      { 'PERFORMANCE ANALYTICS': '', ' ': '', '  ': '', '   ': '' },
-      { 'PERFORMANCE ANALYTICS': 'DAILY SALES CHART:', ' ': '', '  ': '', '   ': '' },
-      { 'PERFORMANCE ANALYTICS': '1. Go to "Daily Sales Chart" sheet', ' ': '', '  ': '', '   ': '' },
-      { 'PERFORMANCE ANALYTICS': '2. Select data range B2:D' + (this.report.dataTable.length + 2), ' ': '', '  ': '', '   ': '' },
-      { 'PERFORMANCE ANALYTICS': '3. Insert > Charts > Column Chart', ' ': '', '  ': '', '   ': '' },
-      { 'PERFORMANCE ANALYTICS': '4. Set Date as X-axis, Revenue as Y-axis', ' ': '', '  ': '', '   ': '' },
-      { 'PERFORMANCE ANALYTICS': '', ' ': '', '  ': '', '   ': '' },
-      { 'PERFORMANCE ANALYTICS': 'PRODUCT PERFORMANCE CHART:', ' ': '', '  ': '', '   ': '' },
-      { 'PERFORMANCE ANALYTICS': '1. Go to "Product Chart" sheet', ' ': '', '  ': '', '   ': '' },
-      { 'PERFORMANCE ANALYTICS': '2. Select data range A2:C' + (this.analytics.topProducts.length + 2), ' ': '', '  ': '', '   ': '' },
-      { 'PERFORMANCE ANALYTICS': '3. Insert > Charts > Bar Chart', ' ': '', '  ': '', '   ': '' },
-      { 'PERFORMANCE ANALYTICS': '4. Set Product as Categories, Revenue as Values', ' ': '', '  ': '', '   ': '' },
-      { 'PERFORMANCE ANALYTICS': '', ' ': '', '  ': '', '   ': '' },
-      { 'PERFORMANCE ANALYTICS': 'SIZE DISTRIBUTION CHART:', ' ': '', '  ': '', '   ': '' },
-      { 'PERFORMANCE ANALYTICS': '1. Go to "Size Distribution" sheet', ' ': '', '  ': '', '   ': '' },
-      { 'PERFORMANCE ANALYTICS': '2. Select data range A2:C' + (this.analytics.sizeSales.length + 2), ' ': '', '  ': '', '   ': '' },
-      { 'PERFORMANCE ANALYTICS': '3. Insert > Charts > Pie Chart', ' ': '', '  ': '', '   ': '' },
-      { 'PERFORMANCE ANALYTICS': '4. Set Size as Labels, Quantity as Values', ' ': '', '  ': '', '   ': '' },
-      { 'PERFORMANCE ANALYTICS': '', ' ': '', '  ': '', '   ': '' },
-      { 'PERFORMANCE ANALYTICS': 'MONTHLY TREND CHART:', ' ': '', '  ': '', '   ': '' },
-      { 'PERFORMANCE ANALYTICS': '1. Go to "Monthly Trend" sheet', ' ': '', '  ': '', '   ': '' },
-      { 'PERFORMANCE ANALYTICS': '2. Select data range A2:C' + (this.analytics.monthlySales.length + 2), ' ': '', '  ': '', '   ': '' },
-      { 'PERFORMANCE ANALYTICS': '3. Insert > Charts > Line Chart', ' ': '', '  ': '', '   ': '' },
-      { 'PERFORMANCE ANALYTICS': '4. Set Month as X-axis, Revenue as Y-axis', ' ': '', '  ': '', '   ': '' }
+      { 'OR NUMBER TRACKING': '', ' ': '', '  ': '', '   ': '', '    ': '' },
+      { 'OR NUMBER TRACKING': 'OR SUMMARY', ' ': '', '  ': '', '   ': '', '    ': '' },
+      { 'OR NUMBER TRACKING': 'Total OR Numbers Issued:', ' ': [...new Set(filteredOrders.filter(o => o.or_number).map(o => o.or_number))].length.toString(), '  ': '', '   ': '', '    ': '' },
+      { 'OR NUMBER TRACKING': 'Orders with OR:', ' ': filteredOrders.filter(o => o.or_number).length.toString(), '  ': '', '   ': '', '    ': '' },
+      { 'OR NUMBER TRACKING': 'Orders without OR:', ' ': filteredOrders.filter(o => !o.or_number).length.toString(), '  ': '', '   ': '', '    ': '' },
+      { 'OR NUMBER TRACKING': 'Total Revenue with OR:', ' ': `₱${filteredOrders.filter(o => o.or_number).reduce((sum, order) => sum + this.getProductPrice(order.product), 0).toFixed(2)}`, '  ': '', '   ': '', '    ': '' }
     ];
     
-    const analyticsSheet = XLSX.utils.json_to_sheet(analyticsData);
-    XLSX.utils.book_append_sheet(workbook, analyticsSheet, 'Chart Instructions');
-
-    // Sheet 7: Complete Insights & Recommendations
-    const insightsData = [
-      { 'INSIGHTS & RECOMMENDATIONS': '', ' ': '', '  ': '' },
-      { 'INSIGHTS & RECOMMENDATIONS': 'KEY BUSINESS INSIGHTS', ' ': '', '  ': '' },
-      { 'INSIGHTS & RECOMMENDATIONS': '', ' ': '', '  ': '' },
-      ...this.report.insights.map(insight => ({ 
-        'INSIGHTS & RECOMMENDATIONS': '•', ' ': insight, '  ': '' 
-      })),
-      { 'INSIGHTS & RECOMMENDATIONS': '', ' ': '', '  ': '' },
-      { 'INSIGHTS & RECOMMENDATIONS': 'STRATEGIC RECOMMENDATIONS', ' ': '', '  ': '' },
-      { 'INSIGHTS & RECOMMENDATIONS': '', ' ': '', '  ': '' },
-      ...this.report.sections.recommendations.map(rec => ({ 
-        'INSIGHTS & RECOMMENDATIONS': '•', ' ': rec, '  ': '' 
-      })),
-      { 'INSIGHTS & RECOMMENDATIONS': '', ' ': '', '  ': '' },
-      { 'INSIGHTS & RECOMMENDATIONS': 'IMMEDIATE ACTION ITEMS', ' ': '', '  ': '' },
-      { 'INSIGHTS & RECOMMENDATIONS': '', ' ': '', '  ': '' },
-      ...this.report.actionablePoints.map((action, index) => ({ 
-        'INSIGHTS & RECOMMENDATIONS': `${index + 1}.`, ' ': action, '  ': '' 
-      })),
-      { 'INSIGHTS & RECOMMENDATIONS': '', ' ': '', '  ': '' },
-      { 'INSIGHTS & RECOMMENDATIONS': 'CONCLUSIONS', ' ': '', '  ': '' },
-      { 'INSIGHTS & RECOMMENDATIONS': '', ' ': '', '  ': '' },
-      ...this.report.conclusions.map(conclusion => ({ 
-        'INSIGHTS & RECOMMENDATIONS': '•', ' ': conclusion, '  ': '' 
-      }))
-    ];
-    
-    const insightsSheet = XLSX.utils.json_to_sheet(insightsData);
-    XLSX.utils.book_append_sheet(workbook, insightsSheet, 'Insights & Actions');
+    const orNumberSheet = XLSX.utils.json_to_sheet(orNumberData);
+    XLSX.utils.book_append_sheet(workbook, orNumberSheet, 'OR Number Tracking');
 
     // Apply formatting to sheets
     this.formatExcelSheet(summarySheet);
-    this.formatExcelSheet(dailySalesSheet);
+    this.formatExcelSheet(ordersSheet);
     this.formatExcelSheet(productSheet);
-    if (this.analytics.sizeSales.length > 0) {
-      const sizeSheet = workbook.Sheets['Size Distribution'];
-      this.formatExcelSheet(sizeSheet);
-    }
-    if (this.analytics.monthlySales.length > 0) {
-      const monthlySheet = workbook.Sheets['Monthly Trend'];
-      this.formatExcelSheet(monthlySheet);
-    }
-    this.formatExcelSheet(analyticsSheet);
-    this.formatExcelSheet(insightsSheet);
+    this.formatExcelSheet(orNumberSheet);
 
     // Generate and download the file
     const excelBuffer: any = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
     const data: Blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    FileSaver.saveAs(data, `Professional_Sales_Report_with_Charts_${new Date().toISOString().split('T')[0]}.xlsx`);
+    
+    // Create filename based on date range
+    const dateRangeText = this.reportStartDate && this.reportEndDate ? 
+      `${this.reportStartDate}_to_${this.reportEndDate}` : 
+      'All_Time';
+    
+    FileSaver.saveAs(data, `Sales_Report_${dateRangeText}_${new Date().toISOString().split('T')[0]}.xlsx`);
   }
 
   // Format Excel sheets for better presentation
@@ -1773,6 +2301,7 @@ private fetchYourProductsAndOrders(userEmail: string) {
       case 'size': return order.size || '';
       case 'status': return order.status || '';
       case 'created_at': return order.created_at ? new Date(order.created_at) : new Date();
+      case 'pickup_date': return order.pickup_date ? new Date(order.pickup_date) : new Date('1900-01-01');
       default: return '';
     }
   }
@@ -1829,6 +2358,340 @@ private fetchYourProductsAndOrders(userEmail: string) {
   // Track by function for ngFor performance
   trackByOrderId(index: number, order: Order): number {
     return order.id;
+  }
+
+  // Order Details Modal Methods
+  viewOrderDetails(order: Order) {
+    console.log('🔍 VIEWING ORDER DETAILS');
+    console.log('Selected order:', order);
+    
+    this.selectedOrder = order;
+    this.showOrderModal = true;
+  }
+
+  closeOrderModal() {
+    console.log('🚪 CLOSING ORDER MODAL');
+    this.showOrderModal = false;
+    this.selectedOrder = null;
+  }
+
+  // Debug method to force refresh product data
+  forceRefreshProducts() {
+    console.log('🔄 FORCE REFRESHING PRODUCTS');
+    this.fetchProducts();
+  }
+
+  approveOrderFromModal() {
+    if (this.selectedOrder) {
+      this.approveOrder(this.selectedOrder);
+      this.closeOrderModal();
+    }
+  }
+
+  declineOrderFromModal() {
+    if (this.selectedOrder) {
+      this.declineOrder(this.selectedOrder);
+      this.closeOrderModal();
+    }
+  }
+
+  // Base URL for images
+  private baseUrl: string = 'http://localhost:3001/e-comm-images/';
+
+  // Get image URL - ensure we display the exact product image
+  getImageUrl(image: string): string {
+    console.log('🖼️ CONSTRUCTING IMAGE URL');
+    console.log('Input image path:', image);
+    console.log('Base URL:', this.baseUrl);
+    
+    if (!image || image.trim() === '') {
+      console.log('⚠️ No image path provided, using fallback GPS logo');
+      const fallbackUrl = this.baseUrl + '67e96269e8a71_gps logo.png';
+      console.log('Fallback URL:', fallbackUrl);
+      return fallbackUrl;
+    }
+    
+    // Extract filename from any path format
+    const filename = image.split('/').pop()?.split('\\').pop() || image;
+    
+    // Construct URL with base URL + filename
+    const fullUrl = this.baseUrl + filename.trim();
+    console.log('✅ Final image URL:', fullUrl);
+    return fullUrl;
+  }
+
+  onImageError(event: any) {
+    // Handle image load error more carefully to show exact product images
+    const currentSrc = event.target.src;
+    
+    console.log('🚨 IMAGE LOAD ERROR 🚨');
+    console.log('Failed image URL:', currentSrc);
+    
+    // Only use fallback if we're not already showing a fallback image
+    if (!currentSrc.includes('67e96269e8a71_gps logo.png') && 
+        !currentSrc.includes('data:image/svg+xml')) {
+      
+      // Try the GPS logo as a last resort
+      console.log('🔄 Falling back to GPS logo');
+      event.target.src = this.baseUrl + '67e96269e8a71_gps logo.png';
+      return;
+    }
+    
+    // If even the GPS logo fails, use SVG placeholder
+    if (currentSrc.includes('67e96269e8a71_gps logo.png')) {
+      console.log('🔄 GPS logo failed, using SVG placeholder');
+      event.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjBmMGYwIi8+CiAgPHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OTk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPk5vIEltYWdlPC90ZXh0Pgo8L3N2Zz4K';
+    }
+    
+    // Prevent further error events on this element
+    event.target.onerror = null;
+  }
+
+  // Method to confirm order pickup by customer from modal
+  confirmPickupFromModal(): void {
+    if (!this.selectedOrder) {
+      console.error('Selected order is null');
+      Swal.fire('Error', 'No order selected. Please try again.', 'error');
+      return;
+    }
+    
+    // Show OR Number modal instead of direct confirmation
+    this.processingOrder = this.selectedOrder;
+    this.showOrNumberModal = true;
+    this.orNumber = ''; // Reset OR number field
+  }
+
+  // Close OR Number modal
+  closeOrNumberModal(): void {
+    this.showOrNumberModal = false;
+    this.orNumber = '';
+    this.processingOrder = null;
+  }
+
+  // Open remarks modal for completed orders
+  openRemarksModal(order: Order): void {
+    this.remarksOrder = order;
+    this.completionRemarks = order.completion_remarks || '';
+    this.showRemarksModal = true;
+  }
+
+  // Close remarks modal
+  closeRemarksModal(): void {
+    this.showRemarksModal = false;
+    this.completionRemarks = '';
+    this.remarksOrder = null;
+  }
+
+  // Submit completion remarks
+  submitCompletionRemarks(): void {
+    if (!this.remarksOrder) {
+      return;
+    }
+
+    // Validate remarks input
+    if (!this.completionRemarks || this.completionRemarks.trim() === '') {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Remarks Required',
+        text: 'Please enter your remarks before submitting.',
+        timer: 2000,
+        showConfirmButton: false
+      });
+      return;
+    }
+
+    const token = localStorage.getItem('auth_token');
+    const userEmail = localStorage.getItem('user_email');
+    
+    if (!token || !userEmail) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Authentication Error',
+        text: 'Please login again to continue.',
+        timer: 3000,
+        showConfirmButton: false
+      });
+      return;
+    }
+
+    // Update local order optimistically
+    const originalRemarks = this.remarksOrder.completion_remarks;
+    this.remarksOrder.completion_remarks = this.completionRemarks.trim();
+
+    // Call API to save completion remarks
+    this.http.post(
+      `http://localhost:3001/api/orders?admin=${encodeURIComponent(userEmail)}`,
+      { 
+        action: 'update-completion-remarks', 
+        orderId: this.remarksOrder.id,
+        remarks: this.completionRemarks.trim()
+      },
+      { 
+        withCredentials: true,
+        headers: this.getHeaders(),
+        responseType: 'text'
+      }
+    ).subscribe({
+      next: (response: string) => {
+        console.log('✅ COMPLETION REMARKS RESPONSE:', response);
+        
+        // Close the remarks modal
+        this.closeRemarksModal();
+        
+        // Show success message
+        Swal.fire({
+          icon: 'success',
+          title: 'Remarks Saved!',
+          text: 'Completion remarks have been saved successfully.',
+          timer: 2000,
+          showConfirmButton: false
+        });
+        
+        // Refresh orders to get updated data
+        this.fetchOrders();
+      },
+      error: (err) => {
+        console.error('❌ COMPLETION REMARKS ERROR:', err);
+        
+        // Revert local changes
+        if (this.remarksOrder) {
+          this.remarksOrder.completion_remarks = originalRemarks;
+        }
+        
+        // Show error message
+        Swal.fire({
+          icon: 'error',
+          title: 'Error Saving Remarks',
+          text: 'Failed to save completion remarks. Please try again.',
+          timer: 3000,
+          showConfirmButton: false
+        });
+      }
+    });
+  }
+
+  // Submit OR Number and confirm pickup
+  submitOrNumberAndConfirmPickup(): void {
+    if (!this.processingOrder) {
+      console.error('Processing order is null');
+      Swal.fire('Error', 'Order data is missing. Please close and try again.', 'error');
+      this.closeOrNumberModal();
+      return;
+    }
+    
+    // Validate OR Number
+    if (!this.orNumber || this.orNumber.trim() === '') {
+      Swal.fire({
+        icon: 'error',
+        title: 'OR Number Required',
+        text: 'Please enter the Official Receipt Number before confirming pickup.',
+        customClass: {
+          popup: 'swal-on-top'
+        },
+        didOpen: () => {
+          const swalContainer = document.querySelector('.swal2-container');
+          if (swalContainer) {
+            (swalContainer as HTMLElement).style.zIndex = '9999';
+          }
+        }
+      });
+      return;
+    }
+
+    // Show confirmation dialog with OR Number
+    Swal.fire({
+      title: 'Confirm Customer Pickup',
+      html: `
+        <p>Confirm that customer has picked up "<strong>${this.processingOrder.product}</strong>"?</p>
+        <p><strong>OR Number:</strong> ${this.orNumber}</p>
+      `,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#28a745',
+      cancelButtonColor: '#dc3545',
+      confirmButtonText: 'Yes, confirm pickup',
+      cancelButtonText: 'Cancel',
+      // Ensure SweetAlert appears above all modals
+      customClass: {
+        popup: 'swal-on-top'
+      },
+      // Set higher z-index to appear above modals
+      didOpen: () => {
+        const swalContainer = document.querySelector('.swal2-container');
+        if (swalContainer) {
+          (swalContainer as HTMLElement).style.zIndex = '9999';
+        }
+      }
+    }).then((result) => {
+      if (result.isConfirmed) {
+        // Add null check before calling processPickupConfirmation
+        if (this.processingOrder) {
+          this.processPickupConfirmation(this.processingOrder);
+        } else {
+          Swal.fire('Error', 'Order data is missing. Please try again.', 'error');
+          this.closeOrNumberModal();
+        }
+      }
+    });
+  }
+
+  private processPickupConfirmation(order: Order): void {
+    // Add null check for order parameter
+    if (!order) {
+      console.error('Order is null in processPickupConfirmation');
+      Swal.fire('Error', 'Order data is missing. Please try again.', 'error');
+      this.closeOrNumberModal();
+      return;
+    }
+
+    const token = localStorage.getItem('auth_token');
+    const userEmail = localStorage.getItem('user_email');
+    
+    if (!token || !userEmail) {
+      Swal.fire('Error', 'Authentication required. Please login again.', 'error');
+      this.router.navigate(['/admin-login']);
+      return;
+    }
+
+    // Update status optimistically
+    const originalStatus = order.status;
+    order.status = 'completed';
+
+    // Call API to confirm pickup with OR Number
+    this.productService.confirmOrderPickup(order.id, order.customer, token, this.orNumber).subscribe({
+      next: (response) => {
+        Swal.fire({
+          title: 'Pickup Confirmed!',
+          html: `
+            <p>The customer pickup has been confirmed.</p>
+            <p><strong>OR Number:</strong> ${this.orNumber}</p>
+            <p>The order is now completed.</p>
+          `,
+          icon: 'success',
+          timer: 3000,
+          showConfirmButton: false
+        });
+        // Close modals and refresh orders
+        this.closeOrNumberModal();
+        this.closeOrderModal();
+        this.fetchOrders();
+      },
+      error: (error) => {
+        console.error('Error confirming pickup:', error);
+        // Revert status on error
+        order.status = originalStatus;
+        
+        let errorMessage = 'Failed to confirm pickup. Please try again.';
+        if (error.status === 401) {
+          errorMessage = 'Session expired. Please login again.';
+          this.router.navigate(['/admin-login']);
+        } else if (error.status === 404) {
+          errorMessage = 'Order not found or already completed.';
+        }
+        
+        Swal.fire('Error', errorMessage, 'error');
+      }
+    });
   }
 
   logout() {

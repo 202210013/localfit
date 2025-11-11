@@ -20,7 +20,7 @@
                         </div>
                         <div class="brand-info">
                             <span class="brand-logo">LOCALFIT</span>
-                            <span class="page-title">Shopping Cart</span>
+                            <span class="page-title">{{ isOrderSummaryMode ? 'Order Summary' : 'Shopping Cart' }}</span>
                         </div>
                     </div>
                 </div>
@@ -47,9 +47,13 @@
                 <div class="cart-items-header">
                     <h2 class="section-title">
                         <i class="fa-solid fa-shopping-bag"></i>
-                        Your Cart Items
+                        {{ isOrderSummaryMode ? 'Order Details' : 'Your Cart Items' }}
                         <span class="items-count">({{ carts.length }} items)</span>
                     </h2>
+                    <div *ngIf="isOrderSummaryMode" class="order-summary-note">
+                        <i class="fa-solid fa-info-circle"></i>
+                        Review your order details below and proceed to checkout
+                    </div>
                 </div>
 
                 <!-- Cart Items List -->
@@ -168,14 +172,26 @@
                     </div>
                     
                     <div class="checkout-actions">
+                        <button *ngIf="isOrderSummaryMode" class="continue-shopping-btn" 
+                                (click)="continueShopping()">
+                            <i class="fa-solid fa-arrow-left"></i>
+                            <span class="btn-text">Continue Shopping</span>
+                        </button>
+                        
                         <button class="checkout-btn" 
-                                [disabled]="selectedCarts.length === 0"
+                                [disabled]="selectedCarts.length === 0 || isCheckoutLoading"
                                 data-bs-toggle="modal" 
                                 data-bs-target="#summaryModal"
-                                [class.disabled]="selectedCarts.length === 0">
-                            <i class="fa-solid fa-credit-card"></i>
-                            <span class="btn-text">Proceed to Checkout</span>
-                            <span class="amount" *ngIf="selectedCarts.length > 0">₱{{ calculateSelectedTotal().toFixed(2) }}</span>
+                                [class.disabled]="selectedCarts.length === 0 || isCheckoutLoading"
+                                [class.loading]="isCheckoutLoading">
+                            <div class="btn-content">
+                                <i class="fa-solid fa-spinner fa-spin" *ngIf="isCheckoutLoading"></i>
+                                <i class="fa-solid fa-credit-card" *ngIf="!isCheckoutLoading"></i>
+                                <span class="btn-text">
+                                    {{ isCheckoutLoading ? 'Processing...' : (isOrderSummaryMode ? 'Confirm Order' : 'Proceed to Checkout') }}
+                                </span>
+                                <span class="amount" *ngIf="selectedCarts.length > 0 && !isCheckoutLoading">₱{{ calculateSelectedTotal().toFixed(2) }}</span>
+                            </div>
                         </button>
                     </div>
                 </div>
@@ -314,10 +330,6 @@
                                 <span class="label">Subtotal ({{ selectedCarts.length }} items)</span>
                                 <span class="value">₱{{ calculateSelectedTotal().toFixed(2) }}</span>
                             </div>
-                            <div class="total-row shipping">
-                                <span class="label">Shipping Fee</span>
-                                <span class="value free">Free</span>
-                            </div>
                             <div class="total-row final-total">
                                 <span class="label">Total Amount</span>
                                 <span class="value">₱{{ calculateSelectedTotal().toFixed(2) }}</span>
@@ -331,10 +343,19 @@
                     <i class="fa-solid fa-arrow-left"></i>
                     Continue Shopping
                 </button>
-                <button type="button" class="btn modern-btn primary-btn checkout-final" (click)="checkout()" data-bs-dismiss="modal">
-                    <i class="fa-solid fa-credit-card"></i>
-                    Complete Checkout
-                    <span class="checkout-amount">₱{{ calculateSelectedTotal().toFixed(2) }}</span>
+                <button type="button" class="btn modern-btn primary-btn checkout-final" 
+                        (click)="checkout()" 
+                        data-bs-dismiss="modal"
+                        [disabled]="isCheckoutLoading"
+                        [class.loading]="isCheckoutLoading">
+                    <div class="btn-content">
+                        <i class="fa-solid fa-spinner fa-spin" *ngIf="isCheckoutLoading"></i>
+                        <i class="fa-solid fa-credit-card" *ngIf="!isCheckoutLoading"></i>
+                        <span class="btn-text">
+                            {{ isCheckoutLoading ? 'Processing Order...' : 'Complete Checkout' }}
+                        </span>
+                        <span class="checkout-amount" *ngIf="!isCheckoutLoading">₱{{ calculateSelectedTotal().toFixed(2) }}</span>
+                    </div>
                 </button>
             </div>
         </div>

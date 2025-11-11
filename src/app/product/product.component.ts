@@ -19,7 +19,7 @@ export class ProductComponent implements OnInit {
     products: Product[] | undefined;
     allProducts: Product[] | undefined;
     productForm: FormGroup = new FormGroup({});
-    baseUrl: string = 'https://images.localfit.store/';
+    baseUrl: string = 'http://localhost:3001/e-comm-images/';
     updateMode = false;
     updateForm: FormGroup = new FormGroup({});
     selectedProductId: number | null = null;
@@ -31,6 +31,19 @@ export class ProductComponent implements OnInit {
     isModalOpen = false;
     selectedProduct: Product | undefined;
     previewUrl: string | undefined;
+    
+    // Image preview properties
+    createImagePreview: string | null = null;
+    editImagePreview: string | null = null;
+
+    // Size management
+    availableSizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
+    selectedSizes: string[] = [];
+    editSelectedSizes: string[] = [];
+    
+    // Size-specific quantities
+    sizeQuantities: { [size: string]: number } = {};
+    editSizeQuantities: { [size: string]: number } = {};
 
     // Add categories
     categories = [
@@ -68,8 +81,170 @@ export class ProductComponent implements OnInit {
             image: '',
             category: this.categories[0]
         });
+        this.updateForm.patchValue({
+            name: '',
+            price: '',
+            description: '',
+            image: '',
+            category: this.categories[0]
+        });
         this.fileName = '';
         this.previewUrl = undefined;
+        this.createImagePreview = null;
+        this.editImagePreview = null;
+        this.selectedSizes = [];
+        this.editSelectedSizes = [];
+        this.sizeQuantities = {};
+        this.editSizeQuantities = {};
+    }
+
+    // Size management methods
+    toggleSize(size: string, isEdit: boolean = false) {
+        if (isEdit) {
+            const index = this.editSelectedSizes.indexOf(size);
+            if (index > -1) {
+                this.editSelectedSizes.splice(index, 1);
+                delete this.editSizeQuantities[size]; // Remove quantity when size is deselected
+            } else {
+                this.editSelectedSizes.push(size);
+                this.editSizeQuantities[size] = 1; // Default quantity when size is selected
+            }
+        } else {
+            const index = this.selectedSizes.indexOf(size);
+            if (index > -1) {
+                this.selectedSizes.splice(index, 1);
+                delete this.sizeQuantities[size]; // Remove quantity when size is deselected
+            } else {
+                this.selectedSizes.push(size);
+                this.sizeQuantities[size] = 1; // Default quantity when size is selected
+            }
+        }
+    }
+
+    isSizeSelected(size: string, isEdit: boolean = false): boolean {
+        return isEdit ? this.editSelectedSizes.includes(size) : this.selectedSizes.includes(size);
+    }
+
+    // Handle quantity changes for specific size
+    onSizeQuantityChange(size: string, quantity: number, isEdit: boolean = false) {
+        const qty = Math.max(0, Math.floor(quantity || 0)); // Ensure non-negative integer
+        if (isEdit) {
+            this.editSizeQuantities[size] = qty;
+        } else {
+            this.sizeQuantities[size] = qty;
+        }
+    }
+
+    // Get quantity for a specific size
+    getSizeQuantity(size: string, isEdit: boolean = false): number {
+        return isEdit ? (this.editSizeQuantities[size] || 1) : (this.sizeQuantities[size] || 1);
+    }
+
+    // Calculate total quantity from all sizes
+    getTotalQuantity(isEdit: boolean = false): number {
+        const quantities = isEdit ? this.editSizeQuantities : this.sizeQuantities;
+        
+        if (!quantities || typeof quantities !== 'object') {
+            return 0;
+        }
+        
+        return Object.values(quantities).reduce((total: number, qty: unknown) => {
+            const numQty = Number(qty) || 0;
+            return total + numQty;
+        }, 0);
+    }
+
+    // Get size quantities from product
+    getProductSizeQuantities(product: Product): { [size: string]: number } {
+        if (!product.size_quantities) {
+            return {};
+        }
+        
+        // If it's already an object, return it
+        if (typeof product.size_quantities === 'object') {
+            return product.size_quantities;
+        }
+        
+        // If it's a JSON string, parse it
+        if (typeof product.size_quantities === 'string') {
+            try {
+                const parsed = JSON.parse(product.size_quantities);
+                return typeof parsed === 'object' ? parsed : {};
+            } catch (e) {
+                console.error('Error parsing size_quantities:', e);
+                return {};
+            }
+        }
+        
+        return {};
+    }
+
+    // Get sizes with stock information (shows live editing values if currently editing)
+    getSizesWithStock(product: Product): { size: string, quantity: number, inStock: boolean }[] {
+        // If we're currently editing this product, use the live edit values
+        const isCurrentlyEditing = this.selectedProductId === product.id && this.updateMode;
+        
+        let sizeQuantities: { [size: string]: number };
+        let availableSizes: string[];
+        
+        if (isCurrentlyEditing) {
+            // Use current editing values
+            sizeQuantities = this.editSizeQuantities;
+            availableSizes = this.editSelectedSizes;
+        } else {
+            // Use database values
+            sizeQuantities = this.getProductSizeQuantities(product);
+            availableSizes = product.available_sizes || [];
+        }
+        
+        return availableSizes.map(size => ({
+            size: size,
+            quantity: sizeQuantities[size] || 0,
+            inStock: (sizeQuantities[size] || 0) > 0
+        }));
+    }
+
+    // Get current total quantity (live editing values if currently editing)
+    getCurrentTotalQuantity(product: Product): number {
+        const isCurrentlyEditing = this.selectedProductId === product.id && this.updateMode;
+        
+        if (isCurrentlyEditing) {
+            // Calculate from current editing values
+            return Object.values(this.editSizeQuantities).reduce((total: number, qty: number) => total + (qty || 0), 0);
+        } else {
+            // Calculate from size_quantities if available, otherwise use quantity field
+            if (product.size_quantities && typeof product.size_quantities === 'object') {
+                return Object.values(product.size_quantities).reduce((total: number, qty: number) => total + (qty || 0), 0);
+            } else {
+                // If quantity is a string (JSON), try to parse it; otherwise use the number
+                let quantity = product.quantity || 0;
+                if (typeof quantity === 'string') {
+                    try {
+                        const parsed = JSON.parse(quantity);
+                        if (typeof parsed === 'object' && parsed !== null) {
+                            return Object.values(parsed).reduce((total: number, qty: unknown) => total + (Number(qty) || 0), 0);
+                        }
+                        return parsed || 0;
+                    } catch (e) {
+                        return 0;
+                    }
+                }
+                return quantity;
+            }
+        }
+    }
+
+    // Check if product has any stock
+    hasStock(product: Product): boolean {
+        return this.getCurrentTotalQuantity(product) > 0;
+    }
+
+    // Get stock status for product (considers live editing)
+    getStockStatus(product: Product): 'out-of-stock' | 'low-stock' | 'in-stock' {
+        const totalQty = this.getCurrentTotalQuantity(product);
+        if (totalQty <= 0) return 'out-of-stock';
+        if (totalQty < 5) return 'low-stock';
+        return 'in-stock';
     }
 
     constructor(private productService: ProductService, public authService: AuthService, private router: Router) { }
@@ -139,19 +314,70 @@ export class ProductComponent implements OnInit {
     }
 
     getImageUrl(imagePath: string): string {
-        // Ensure the image path is returned as is
-        return imagePath;
+        if (!imagePath) return this.baseUrl + 'placeholder.jpg';
+        
+        // Extract filename from any path format
+        const filename = imagePath.split('/').pop()?.split('\\').pop() || imagePath;
+        
+        // Construct URL with base URL + filename
+        return this.baseUrl + filename.trim();
+    }
+
+    // Process product to parse available_sizes from string to array if needed
+    processProductSizes(product: any): any {
+        if (product.available_sizes && typeof product.available_sizes === 'string') {
+            try {
+                // Try to parse as JSON array string
+                product.available_sizes = JSON.parse(product.available_sizes);
+            } catch {
+                // If parsing fails, try to split by comma or other delimiters
+                if (product.available_sizes.includes(',')) {
+                    product.available_sizes = product.available_sizes.split(',').map((s: string) => s.trim());
+                } else if (product.available_sizes.includes('|')) {
+                    product.available_sizes = product.available_sizes.split('|').map((s: string) => s.trim());
+                } else {
+                    // If no delimiters, treat as single size
+                    product.available_sizes = [product.available_sizes.trim()];
+                }
+            }
+        } else if (!product.available_sizes) {
+            // If no sizes are defined, set empty array
+            product.available_sizes = [];
+        }
+        return product;
+    }
+
+    // Get available sizes for any product (used in template)
+    getProductSizes(product: any): string[] {
+        if (product && product.available_sizes) {
+            // If it's already an array, return it
+            if (Array.isArray(product.available_sizes)) {
+                return product.available_sizes;
+            }
+            // If it's still a string, process it
+            if (typeof product.available_sizes === 'string') {
+                const processedProduct = this.processProductSizes(product);
+                return processedProduct.available_sizes;
+            }
+        }
+        return []; // Return empty array if no sizes available
     }
 
     getProducts(): void {
         this.productService.getProducts().subscribe((response: any) => {
-            this.products = response.records;
+            // Process products to parse available_sizes from string to array
+            this.products = response.records.map((product: any) => {
+                return this.processProductSizes(product);
+            });
         });
     }
 
     getAllProducts(): void {
         this.productService.getAllProducts().subscribe((response: any) => {
-            this.allProducts = response.records;
+            // Process products to parse available_sizes from string to array
+            this.allProducts = response.records.map((product: any) => {
+                return this.processProductSizes(product);
+            });
         });
     }
 
@@ -164,35 +390,42 @@ export class ProductComponent implements OnInit {
     onFileChange(event: any): void {
         if (event.target.files.length > 0) {
             const file = event.target.files[0];
-            this.productForm.patchValue({
-                image: file
-            });
             this.fileName = file.name;
-            this.previewUrl = undefined;
 
-            // Read the file as a URL
+            // Read the file as a URL for preview
             const reader = new FileReader();
             reader.onload = (e: any) => {
-                this.previewUrl = e.target.result;
+                const preview = e.target.result;
+                
+                // Determine which input triggered the change
+                if (event.target.id === 'productImage') {
+                    // Create product form
+                    this.createImagePreview = preview;
+                    this.productForm.patchValue({
+                        image: file
+                    });
+                } else if (event.target.id === 'editProductImage') {
+                    // Edit product form
+                    this.editImagePreview = preview;
+                    this.updateForm.patchValue({
+                        image: file
+                    });
+                }
             };
             reader.readAsDataURL(file);
-
-            if (this.updateMode) {
-                this.updateForm.patchValue({
-                    image: file
-                });
-            }
         }
     }
 
     createProduct(): void {
-        if (this.productForm.valid) {
+        if (this.productForm.valid && this.selectedSizes.length > 0) {
             const formData = new FormData();
             formData.append('name', this.productForm.value.name);
             formData.append('price', this.productForm.value.price);
             formData.append('description', this.productForm.value.description);
             formData.append('image', this.productForm.value.image);
             formData.append('category', this.productForm.value.category);
+            formData.append('available_sizes', JSON.stringify(this.selectedSizes));
+            formData.append('size_quantities', JSON.stringify(this.sizeQuantities));
 
             this.productService.createProduct(formData).subscribe(
                 (response: any) => {
@@ -221,11 +454,15 @@ export class ProductComponent implements OnInit {
                 }
             );
         } else {
-            console.error('Form is invalid');
+            console.error('Form is invalid or no sizes selected');
+            let errorMessage = 'Please fill out all required fields.';
+            if (this.selectedSizes.length === 0) {
+                errorMessage = 'Please select at least one available size.';
+            }
             Swal.fire({
                 icon: 'warning',
                 title: 'Invalid Form',
-                text: 'Please fill out all required fields.',
+                text: errorMessage,
                 timer: 1800,
                 showConfirmButton: false
             });
@@ -239,12 +476,31 @@ export class ProductComponent implements OnInit {
     }
 
     updateProduct(): void {
-        if (this.updateForm.valid && this.selectedProductId !== null) {
+        console.log('🔧 UPDATE PRODUCT - Starting update process');
+        console.log('Edit Selected Sizes:', this.editSelectedSizes);
+        console.log('Edit Size Quantities:', this.editSizeQuantities);
+        console.log('Total Quantity:', this.getTotalQuantity(true));
+        
+        // Ensure we have quantities for all selected sizes
+        this.editSelectedSizes.forEach(size => {
+            if (!this.editSizeQuantities[size] || this.editSizeQuantities[size] === undefined) {
+                this.editSizeQuantities[size] = 1;
+                console.log(`Setting default quantity for size ${size}: 1`);
+            }
+        });
+        
+        if (this.updateForm.valid && this.selectedProductId !== null && this.editSelectedSizes.length > 0) {
             const formData = new FormData();
             formData.append('name', this.updateForm.value.name);
             formData.append('price', this.updateForm.value.price);
             formData.append('description', this.updateForm.value.description);
             formData.append('category', this.updateForm.value.category);
+            formData.append('available_sizes', JSON.stringify(this.editSelectedSizes));
+            formData.append('size_quantities', JSON.stringify(this.editSizeQuantities));
+            
+            console.log('✅ FormData being sent:');
+            console.log('- Available Sizes:', JSON.stringify(this.editSelectedSizes));
+            console.log('- Size Quantities:', JSON.stringify(this.editSizeQuantities));
             if (this.updateForm.value.image) {
                 formData.append('image', this.updateForm.value.image);
             }
@@ -279,11 +535,25 @@ export class ProductComponent implements OnInit {
                 }
             );
         } else {
-            console.error('Form is invalid or no product selected');
+            console.error('🚨 UPDATE VALIDATION FAILED');
+            console.error('Form valid:', this.updateForm.valid);
+            console.error('Product ID:', this.selectedProductId);
+            console.error('Edit selected sizes:', this.editSelectedSizes);
+            console.error('Edit size quantities:', this.editSizeQuantities);
+            console.error('Form errors:', this.updateForm.errors);
+            
+            let errorMessage = 'Please fill out all required fields.';
+            if (this.editSelectedSizes.length === 0) {
+                errorMessage = 'Please select at least one available size.';
+            } else if (!this.updateForm.valid) {
+                errorMessage = 'Please fill out all required fields correctly.';
+            } else if (this.selectedProductId === null) {
+                errorMessage = 'No product selected for update.';
+            }
             Swal.fire({
                 icon: 'warning',
                 title: 'Invalid Form',
-                text: 'Please fill out all required fields.',
+                text: errorMessage,
                 timer: 1800,
                 showConfirmButton: false
             });
@@ -301,6 +571,29 @@ export class ProductComponent implements OnInit {
                 image: null,
                 category: product.category,
             });
+            // Set edit selected sizes from product's available sizes
+            this.editSelectedSizes = product.available_sizes ? [...product.available_sizes] : [];
+            
+            // Set edit size quantities from product's size quantities (handle both object and JSON string)
+            const productSizeQuantities = this.getProductSizeQuantities(product);
+            this.editSizeQuantities = productSizeQuantities ? {...productSizeQuantities} : {};
+            
+            console.log('🔧 EDIT MODE ACTIVATED');
+            console.log('Product data:', product);
+            console.log('Available sizes:', product.available_sizes);
+            console.log('Raw size quantities from product:', product.size_quantities);
+            console.log('Parsed size quantities:', productSizeQuantities);
+            console.log('Edit selected sizes set to:', this.editSelectedSizes);
+            console.log('Edit size quantities set to:', this.editSizeQuantities);
+            
+            // Ensure all selected sizes have quantities (default to 1 if missing)
+            this.editSelectedSizes.forEach(size => {
+                if (!this.editSizeQuantities[size]) {
+                    this.editSizeQuantities[size] = 1;
+                }
+            });
+            
+            console.log('Final edit size quantities after defaults:', this.editSizeQuantities);
         }
     }
 

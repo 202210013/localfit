@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Size Availability API</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px; }
+        .result { background: #f5f5f5; padding: 10px; border-radius: 4px; margin: 10px 0; }
+        button { padding: 10px 20px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+    <h1>Size Availability System Test</h1>
+    
+    <div class="test-section">
+        <h2>Test 1: Get All Products (Check if available_sizes is included)</h2>
+        <button onclick="testGetAllProducts()">Test Get All Products</button>
+        <div id="getAllProductsResult" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 2: Create Product with Size Availability</h2>
+        <button onclick="testCreateProduct()">Test Create Product</button>
+        <div id="createProductResult" class="result"></div>
+    </div>
+
+    <script>
+        const apiUrl = 'https://api.localfit.store/ecomm_api/Router.php?request=';
+        // For localhost testing, uncomment the line below and comment the one above
+        // const apiUrl = 'http://localhost/E-comms/ecomm/e-comm/ecomm_api/Router.php?request=';
+
+        async function testGetAllProducts() {
+            try {
+                const response = await fetch(apiUrl + 'product-listing-offline');
+                const data = await response.json();
+                
+                document.getElementById('getAllProductsResult').innerHTML = `
+                    <h3>Response:</h3>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                    <h3>Test Results:</h3>
+                    <p>Total Products: ${data.records ? data.records.length : 0}</p>
+                    <p>First Product Available Sizes: ${data.records && data.records[0] ? JSON.stringify(data.records[0].available_sizes) : 'N/A'}</p>
+                `;
+            } catch (error) {
+                document.getElementById('getAllProductsResult').innerHTML = `
+                    <h3>Error:</h3>
+                    <p style="color: red;">${error.message}</p>
+                `;
+            }
+        }
+
+        async function testCreateProduct() {
+            // Note: This test requires authentication, so it might fail in this demo
+            const formData = new FormData();
+            formData.append('name', 'Test Size Product');
+            formData.append('price', '999.00');
+            formData.append('description', 'Test product with custom sizes');
+            formData.append('category', 'Test');
+            formData.append('available_sizes', JSON.stringify(['XS', 'S', 'M', 'L', 'XL', 'XXL']));
+            
+            // Create a dummy image file for testing
+            const canvas = document.createElement('canvas');
+            canvas.width = 100;
+            canvas.height = 100;
+            canvas.toBlob(async (blob) => {
+                formData.append('image', blob, 'test-image.png');
+                
+                try {
+                    const response = await fetch(apiUrl + 'products-create', {
+                        method: 'POST',
+                        body: formData,
+                        credentials: 'include'
+                    });
+                    const data = await response.json();
+                    
+                    document.getElementById('createProductResult').innerHTML = `
+                        <h3>Response:</h3>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                        <p><strong>Note:</strong> This test might fail if you're not authenticated. The important thing is that the backend accepts the 'available_sizes' parameter.</p>
+                    `;
+                } catch (error) {
+                    document.getElementById('createProductResult').innerHTML = `
+                        <h3>Error:</h3>
+                        <p style="color: red;">${error.message}</p>
+                        <p><strong>Note:</strong> This is expected if you're not authenticated. The test shows the backend structure is ready.</p>
+                    `;
+                }
+            });
+        }
+
+        // Auto-run the get products test when page loads
+        window.onload = function() {
+            testGetAllProducts();
+        };
+    </script>
+</body>
+</html>

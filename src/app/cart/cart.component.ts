@@ -5,7 +5,7 @@ import { ProductService } from '../services/e-comm.service';
 import { CommonModule } from '@angular/common';
 import { Cart } from '../models/cart.models';
 import { AuthService } from '../services/auth.service';
-import { Router } from '@angular/router';
+import { Router, ActivatedRoute } from '@angular/router';
 import Swal from 'sweetalert2';
 
 @Component({
@@ -19,7 +19,7 @@ export class CartComponent implements OnInit {
   products: Product[] | undefined;
   allProducts: Product[] | undefined;
   productForm: FormGroup = new FormGroup({});
-  baseUrl: string = 'https://images.localfit.store/';
+  baseUrl: string = 'http://localhost:3001/e-comm-images/';
   
 
   updateMode = false;
@@ -35,6 +35,11 @@ export class CartComponent implements OnInit {
   selectedProduct: Product | undefined;
 
   selectedCartId: number | null = null;
+
+  // Buy now flow detection
+  isBuyNowFlow: boolean = false;
+  isOrderSummaryMode: boolean = false;
+  isCheckoutLoading: boolean = false; // Add loading state
 
   setSelectedCartId(cartId: number): void {
     this.selectedCartId = cartId;
@@ -69,9 +74,28 @@ export class CartComponent implements OnInit {
   }
 
 
-  constructor(private productService: ProductService, public authService: AuthService, private router: Router) { }
+  constructor(private productService: ProductService, public authService: AuthService, private router: Router, private route: ActivatedRoute) { }
 
   ngOnInit(): void {
+    // Check if this is a buy now flow
+    this.route.queryParams.subscribe(params => {
+      this.isBuyNowFlow = params['buynow'] === 'true';
+      this.isOrderSummaryMode = params['action'] === 'summary' || params['action'] === 'checkout';
+      const directCheckout = params['directCheckout'] === 'true';
+      
+      if (this.isBuyNowFlow && directCheckout) {
+        // Automatically select only the most recently added item for direct checkout
+        setTimeout(() => {
+          this.selectMostRecentItemForCheckout();
+        }, 500); // Delay to ensure carts are loaded
+      } else if (this.isBuyNowFlow && this.isOrderSummaryMode) {
+        // For regular buy now flow - no popup needed
+        setTimeout(() => {
+          // Order summary ready - no alert needed
+        }, 500);
+      }
+    });
+
     this.productForm = new FormGroup({
       name: new FormControl(''),
       price: new FormControl(''),
@@ -94,7 +118,20 @@ export class CartComponent implements OnInit {
   goToMessege() {
     this.router.navigate(['/messages']);
   }
+  
   goToCart() {
+    this.router.navigate(['/cart']);
+  }
+
+  continueShopping() {
+    // Clear buy now mode and go back to product listing
+    this.isBuyNowFlow = false;
+    this.isOrderSummaryMode = false;
+    this.router.navigate(['/product-listing']);
+  }
+
+  clearOrderSummaryMode() {
+    // Clear query parameters to exit order summary mode
     this.router.navigate(['/cart']);
   }
 
@@ -130,7 +167,13 @@ export class CartComponent implements OnInit {
   }
 
   getImageUrl(image: string): string {
-    return this.baseUrl + image;
+    if (!image) return this.baseUrl + 'placeholder.jpg';
+    
+    // Extract filename from any path format
+    const filename = image.split('/').pop()?.split('\\').pop() || image;
+    
+    // Construct URL with base URL + filename
+    return this.baseUrl + filename.trim();
   }
 
   getProducts(): void {
@@ -154,6 +197,51 @@ export class CartComponent implements OnInit {
     });
   }
 
+  selectMostRecentItemForCheckout(): void {
+    if (this.carts && this.carts.length > 0) {
+      // For Buy Now flow, only select the most recently added item (highest ID)
+      const mostRecentItem = this.carts.reduce((latest, current) => 
+        current.id > latest.id ? current : latest
+      );
+      
+      // Clear all selections first
+      this.carts.forEach(cart => cart.selected = false);
+      
+      // Select only the most recent item
+      mostRecentItem.selected = true;
+      this.selectedCarts = [mostRecentItem];
+      this.selectAll = false;
+      this.calculateTotal();
+      
+      // Scroll to summary section and auto-click checkout button
+      setTimeout(() => {
+        this.scrollToSummarySection();
+        
+        // Auto-click the checkout button after a short delay
+        setTimeout(() => {
+          this.autoClickCheckoutButton();
+        }, 1000); // Wait 1 second after scrolling to auto-click
+      }, 500);
+    }
+  }
+
+  autoClickCheckoutButton(): void {
+    const checkoutBtn = document.querySelector('.checkout-btn') as HTMLButtonElement;
+    if (checkoutBtn && !checkoutBtn.disabled) {
+      checkoutBtn.click();
+    }
+  }
+
+  scrollToSummarySection(): void {
+    const summaryElement = document.querySelector('.summary-section');
+    if (summaryElement) {
+      summaryElement.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'start' 
+      });
+    }
+  }
+
   checkout(): void {
   if (this.carts) {
     this.selectedCarts = this.carts.filter(cart => cart.selected);
@@ -168,12 +256,16 @@ export class CartComponent implements OnInit {
       return;
     }
 
+    // Start loading
+    this.isCheckoutLoading = true;
+
     // Prepare order data
     const orders = this.selectedCarts.map(cart => ({
       customer: localStorage.getItem('user_email') || 'guest',
       product: cart.name,
       quantity: cart.quantity,
       size: cart.size || 'M', // Include size information
+      pickup_date: cart.pickup_date, // Include customer-selected pickup date
       status: 'pending'
     }));
 
@@ -185,6 +277,9 @@ export class CartComponent implements OnInit {
     // Send orders to backend
     this.productService.createOrders(orders).subscribe(
       (response: any) => {
+        // Stop loading
+        this.isCheckoutLoading = false;
+        
         Swal.fire({
           icon: 'success',
           title: 'Order placed!',
@@ -200,6 +295,9 @@ export class CartComponent implements OnInit {
         setTimeout(() => this.getCarts(), 500);
       },
       (error: any) => {
+        // Stop loading on error
+        this.isCheckoutLoading = false;
+        
         Swal.fire({
           icon: 'error',
           title: 'Failed to place order.',

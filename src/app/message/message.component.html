@@ -97,8 +97,8 @@
                   <span class="user-status">{{ user.email }}</span>
                 </div>
                 <div class="message-preview">
-                  <span class="last-message">Start a conversation...</span>
-                  <span class="message-time">now</span>
+                  <span class="last-message">{{ getLastMessageContent(user) }}</span>
+                  <span class="message-time">{{ getLastMessageTime(user) }}</span>
                 </div>
               </div>
               <div class="user-actions">
@@ -172,7 +172,7 @@
             <div class="message-content">
               <span class="message-text">{{ message.content }}</span>
               <div class="message-meta">
-                <span class="message-time">now</span>
+                <span class="message-time">{{ formatMessageBubbleTime(message.timestamp) }}</span>
                 <i class="fa-solid fa-check-double delivery-status" *ngIf="message.sender === userName"></i>
               </div>
             </div>

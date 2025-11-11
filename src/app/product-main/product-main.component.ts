@@ -19,7 +19,7 @@ export class ProductsMainComponent implements OnInit {
   products: Product[] | undefined;
   allProducts: Product[] | undefined;
   productForm: FormGroup = new FormGroup({});
-  baseUrl: string = 'https://images.localfit.store/';
+  baseUrl: string = 'http://localhost:3001/e-comm-images/';
   updateMode = false;
   updateForm: FormGroup = new FormGroup({});
   selectedProductId: number | null = null;
@@ -30,9 +30,19 @@ export class ProductsMainComponent implements OnInit {
   isModalOpen = false;
   selectedProduct: Product | undefined;
 
+  // Footer modals
+  isTermsModalOpen = false;
+  isPrivacyModalOpen = false;
+
   
   filteredProducts: Product[] | undefined;
   selectedCategory: string | null = null;
+
+  // Carousel properties
+  currentSlide: number = 0;
+  productsPerSlide: number = 3; // Default for desktop
+  totalSlides: number = 0;
+  maxCarouselProducts: number = 6; // Limit carousel to 6 products
 
   deferredPrompt: any = null;
 
@@ -48,6 +58,23 @@ export class ProductsMainComponent implements OnInit {
   closeModal() {
     this.isModalOpen = false;
     this.selectedProduct = undefined;
+  }
+
+  // Footer modal methods
+  openTermsModal() {
+    this.isTermsModalOpen = true;
+  }
+
+  closeTermsModal() {
+    this.isTermsModalOpen = false;
+  }
+
+  openPrivacyModal() {
+    this.isPrivacyModalOpen = true;
+  }
+
+  closePrivacyModal() {
+    this.isPrivacyModalOpen = false;
   }
 
 
@@ -98,7 +125,13 @@ export class ProductsMainComponent implements OnInit {
   // }
 
   getImageUrl(image: string): string {
-    return this.baseUrl + image;
+    if (!image) return this.baseUrl + 'placeholder.jpg';
+    
+    // Extract filename from any path format
+    const filename = image.split('/').pop()?.split('\\').pop() || image;
+    
+    // Construct URL with base URL + filename
+    return this.baseUrl + filename.trim();
   }
 
   filterByCategory(category: string) {
@@ -225,5 +258,57 @@ export class ProductsMainComponent implements OnInit {
         this.deferredPrompt = null;
       });
     }
+  }
+
+  // Carousel methods
+  getCarouselProducts(): Product[] {
+    if (!this.filteredProducts) return [];
+    return this.filteredProducts.slice(0, this.maxCarouselProducts);
+  }
+
+  nextSlide(): void {
+    const carouselProducts = this.getCarouselProducts();
+    if (carouselProducts && this.currentSlide < carouselProducts.length - this.getProductsPerSlide()) {
+      this.currentSlide++;
+    }
+  }
+
+  previousSlide(): void {
+    if (this.currentSlide > 0) {
+      this.currentSlide--;
+    }
+  }
+
+  goToSlide(slideIndex: number): void {
+    const carouselProducts = this.getCarouselProducts();
+    if (carouselProducts.length > 0) {
+      const maxSlide = Math.ceil(carouselProducts.length / this.getProductsPerSlide()) - 1;
+      this.currentSlide = Math.min(slideIndex, maxSlide);
+    }
+  }
+
+  getProductsPerSlide(): number {
+    // Responsive products per slide based on screen size
+    if (typeof window !== 'undefined') {
+      if (window.innerWidth < 768) {
+        return 1; // Mobile: 1 product per slide
+      } else if (window.innerWidth < 1200) {
+        return 2; // Tablet: 2 products per slide
+      } else {
+        return 3; // Desktop: 3 products per slide
+      }
+    }
+    return 3; // Default fallback
+  }
+
+  getIndicators(): number[] {
+    const carouselProducts = this.getCarouselProducts();
+    if (carouselProducts.length === 0) return [];
+    const totalSlides = Math.ceil(carouselProducts.length / this.getProductsPerSlide());
+    return Array(totalSlides).fill(0).map((_, i) => i);
+  }
+
+  goToProducts(): void {
+    this.router.navigate(['/product-listing']);
   }
 }
