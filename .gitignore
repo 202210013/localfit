@@ -7,9 +7,11 @@
 /bazel-out
 
 # Node
-/node_modules
+node_modules/
+**/node_modules/
 npm-debug.log
 yarn-error.log
+package-lock.json
 
 # IDEs and editors
 .idea/
@@ -45,13 +47,48 @@ Thumbs.db
 ecomm_api/
 ecomm_api_nodejs/
 ecomm_api_old/
+ecomm_nodejs/
+
+# Socket server (should be separate)
+socket-server/
 
 # Database and config files
 *.sql
 *.keystore
 local.properties
+*.env
+*.env.local
+*.env.production
 
 # Build artifacts
 *.apk
 *.aab
 *.idsig
+
+# Logs
+*.log
+logs/
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# Dependency directories
+jspm_packages/
+
+# Optional npm cache directory
+.npm
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
