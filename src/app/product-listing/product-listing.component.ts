@@ -640,7 +640,7 @@ getProductAuthor(product: any): string {
 startAdSlideshow() {
   this.adInterval = setInterval(() => {
     this.currentAdIndex = (this.currentAdIndex + 1) % this.largeAdImages.length;
-  }, 3000); // Change image every 3 seconds
+  }, 3001); // Change image every 3 seconds
 }
 
 ngOnDestroy(): void {

@@ -797,7 +797,7 @@ private fetchYourProductsAndOrders(userEmail: string) {
         icon: 'warning',
         title: 'No Orders to Export',
         text: 'No orders match the current filters. Please adjust your filters and try again.',
-        timer: 3000,
+        timer: 3001,
         showConfirmButton: false
       });
       return;
@@ -2508,7 +2508,7 @@ private fetchYourProductsAndOrders(userEmail: string) {
         icon: 'error',
         title: 'Authentication Error',
         text: 'Please login again to continue.',
-        timer: 3000,
+        timer: 3001,
         showConfirmButton: false
       });
       return;
@@ -2563,7 +2563,7 @@ private fetchYourProductsAndOrders(userEmail: string) {
           icon: 'error',
           title: 'Error Saving Remarks',
           text: 'Failed to save completion remarks. Please try again.',
-          timer: 3000,
+          timer: 3001,
           showConfirmButton: false
         });
       }
@@ -2668,7 +2668,7 @@ private fetchYourProductsAndOrders(userEmail: string) {
             <p>The order is now completed.</p>
           `,
           icon: 'success',
-          timer: 3000,
+          timer: 3001,
           showConfirmButton: false
         });
         // Close modals and refresh orders

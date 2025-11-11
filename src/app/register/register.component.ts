@@ -150,7 +150,7 @@ export class RegisterECommComponent {
         icon: 'warning',
         title: 'Password Too Weak',
         text: 'Please use a stronger password. Your password should include uppercase letters, lowercase letters, numbers, and special characters.',
-        timer: 3000
+        timer: 3001
       });
       return;
     }

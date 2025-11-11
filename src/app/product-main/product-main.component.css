@@ -1911,7 +1911,7 @@ body{
 }
 
 .carousel-product-card .view-details-btn:hover {
-  background: linear-gradient(135deg, #660001 0%, #b30000 100%);
+  background: linear-gradient(135deg, #660001 0%, #b30010 100%);
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(120, 0, 1, 0.3);
 }
@@ -1941,7 +1941,7 @@ body{
 }
 
 .carousel-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #660001 0%, #b30000 100%);
+  background: linear-gradient(135deg, #660001 0%, #b30010 100%);
   transform: translateY(-2px) scale(1.05);
   box-shadow: 0 6px 24px rgba(120, 0, 1, 0.3);
 }

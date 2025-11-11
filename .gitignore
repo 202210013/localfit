@@ -46,11 +46,11 @@ testem.log
 .DS_Store
 Thumbs.db
 
-# Exclude backend API files (separate repository)
-ecomm_api/
-ecomm_api_nodejs/
-ecomm_api_old/
-ecomm_nodejs/
+# # Exclude backend API files (separate repository)
+# ecomm_api/
+# ecomm_api_nodejs/
+# ecomm_api_old/
+# ecomm_nodejs/
 
 # Socket server (should be separate)
 socket-server/
