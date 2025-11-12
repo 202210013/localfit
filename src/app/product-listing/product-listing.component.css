@@ -45,8 +45,10 @@
 }
 
 .brand-icon {
-    color: #cc0000;
-    font-size: 28px;
+    width: 45px;
+    height: 45px;
+    object-fit: contain;
+    display: block;
 }
 
 .brand-text {
@@ -2291,9 +2293,55 @@ button[type="submit"]:hover,
     font-weight: 500;
 }
 
+.production-notice {
+    display: block;
+    margin-top: 8px;
+    padding: 10px 12px;
+    background: rgba(255, 193, 7, 0.1);
+    border-left: 3px solid #ffc107;
+    border-radius: 4px;
+    color: #856404;
+    font-size: 0.85rem;
+    font-weight: 500;
+    line-height: 1.4;
+}
+
+.production-notice i {
+    margin-right: 6px;
+    color: #ffc107;
+}
+
 .pickup-info {
     color: #6b7280;
     font-size: 0.85rem;
+    font-style: italic;
+}
+
+.pickup-disabled-info {
+    display: block;
+    margin-top: 4px;
+    padding: 8px 12px;
+    background: rgba(59, 130, 246, 0.1);
+    border-left: 3px solid #3b82f6;
+    border-radius: 4px;
+    color: #1e40af;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.pickup-disabled-info i {
+    margin-right: 6px;
+    color: #3b82f6;
+}
+
+.popup-date-select:disabled {
+    background-color: #f3f4f6;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.popup-size-select option:disabled {
+    color: #9ca3af;
     font-style: italic;
 }
 

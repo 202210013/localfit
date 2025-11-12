@@ -139,11 +139,10 @@
 }
 
 .brand-icon {
-    font-size: 32px;
-    background: linear-gradient(135deg, #cc0000, #3b82f6);
-    background-clip: text;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    width: 50px;
+    height: 50px;
+    object-fit: contain;
+    display: block;
     animation: brandPulse 3s ease-in-out infinite;
 }
 
@@ -422,11 +421,10 @@
 }
 
 .visual-icon {
-    font-size: 80px;
-    background: linear-gradient(135deg, #cc0000, #3b82f6);
-    background-clip: text;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    width: 120px;
+    height: 120px;
+    object-fit: contain;
+    display: block;
     z-index: 1;
     animation: iconShift 4s ease-in-out infinite alternate;
 }
@@ -813,7 +811,8 @@
     }
     
     .visual-icon {
-        font-size: 60px;
+        width: 90px;
+        height: 90px;
     }
     
     .products-showcase {
@@ -867,7 +866,8 @@
     }
     
     .brand-icon {
-        font-size: 28px;
+        width: 42px;
+        height: 42px;
     }
     
     .auth-btn {
@@ -908,7 +908,8 @@
     }
     
     .visual-icon {
-        font-size: 40px;
+        width: 70px;
+        height: 70px;
     }
 }
 

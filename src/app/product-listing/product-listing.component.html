@@ -5,8 +5,8 @@
         <div class="modern-header">
             <div class="header-brand">
                 <div class="brand-container">
-                    <i class="fa-solid fa-store brand-icon"></i>
-                    <span class="brand-text">LOCALFIT</span>
+                    <img src="https://i.ibb.co/MyHC2QgX/GPS-HIT-FIT-LOGO.png" alt="GPS HIT FIT Logo" class="brand-icon">
+                    <span class="brand-text">GPS HIT FIT SPORTS APPAREL</span>
                 </div>
             </div>
             
@@ -207,19 +207,17 @@
                     <!-- Size selection -->
                     <div class="popup-size-section">
                         <label class="popup-label"><strong>Select Size:</strong></label>
-                        <div *ngIf="hasAvailableSizes(); else noSizesAvailable">
-                            <select [(ngModel)]="selectedSize" class="popup-size-select">
-                                <option value="" disabled>Choose size</option>
-                                <option *ngFor="let size of getAvailableSizes()" [value]="size">{{ size }}</option>
-                            </select>
-                            <small *ngIf="!selectedSize" class="size-error">Size is required</small>
-                        </div>
-                        <ng-template #noSizesAvailable>
-                            <div class="no-sizes-available">
-                                <i class="fa-solid fa-exclamation-triangle"></i>
-                                <span>No sizes available for this product</span>
-                            </div>
-                        </ng-template>
+                        <select [(ngModel)]="selectedSize" (ngModelChange)="onSizeChange()" class="popup-size-select">
+                            <option value="" disabled>Choose size</option>
+                            <option *ngFor="let size of getAllSizes()" [value]="size.size">
+                                {{ size.size }} {{ !size.inStock ? '(Out of Stock - Production Order)' : '' }}
+                            </option>
+                        </select>
+                        <small *ngIf="!selectedSize" class="size-error">Size is required</small>
+                        <small *ngIf="selectedSize && !isSizeInStock()" class="production-notice">
+                            <i class="fa-solid fa-info-circle"></i>
+                            This size is currently out of stock. Your order will be marked as "Pending Production" and processed once the item is reproduced.
+                        </small>
                     </div>
                     
                     <!-- Pickup Date selection -->
@@ -231,28 +229,33 @@
                             class="popup-date-select"
                             [min]="minDate"
                             [max]="maxDate"
+                            [disabled]="!isSizeInStock()"
                         />
-                        <small *ngIf="!selectedPickupDate" class="pickup-error">Pickup date is required</small>
-                        <small class="pickup-info">The shop will open from 9am to 5pm only. </small>
+                        <small *ngIf="!selectedPickupDate && isSizeInStock()" class="pickup-error">Pickup date is required</small>
+                        <small *ngIf="isSizeInStock()" class="pickup-info">The shop will open from 9am to 5pm only.</small>
+                        <small *ngIf="!isSizeInStock()" class="pickup-disabled-info">
+                            <i class="fa-solid fa-clock"></i>
+                            Pickup date will be determined after production is complete.
+                        </small>
                     </div>
                     
                     <div class="popup-actions">
                         <button class="popup-add-to-cart-btn"
-                            [disabled]="!selectedSize || !selectedPickupDate || !hasAvailableSizes()"
-                            [class.disabled]="!selectedSize || !selectedPickupDate || !hasAvailableSizes()"
-                            (click)="selectedProduct && selectedSize && selectedPickupDate && hasAvailableSizes() && addProductToCart(selectedProduct.id, 1, selectedSize, selectedPickupDate); closeModal()">
+                            [disabled]="!selectedSize || (isSizeInStock() && !selectedPickupDate)"
+                            [class.disabled]="!selectedSize || (isSizeInStock() && !selectedPickupDate)"
+                            (click)="selectedProduct && selectedSize && addProductToCart(selectedProduct.id, 1, selectedSize, selectedPickupDate); closeModal()">
                             <i class="fa-solid fa-cart-plus"></i>
-                            <span *ngIf="hasAvailableSizes(); else noSizeAddText">Add to Cart</span>
-                            <ng-template #noSizeAddText>No Sizes Available</ng-template>
+                            <span *ngIf="isSizeInStock()">Add to Cart</span>
+                            <span *ngIf="!isSizeInStock()">Order for Production</span>
                         </button>
                         
                         <button class="popup-buy-now-btn"
-                            [disabled]="!selectedSize || !selectedPickupDate || !hasAvailableSizes()"
-                            [class.disabled]="!selectedSize || !selectedPickupDate || !hasAvailableSizes()"
-                            (click)="selectedProduct && selectedSize && selectedPickupDate && hasAvailableSizes() && buyNow(selectedProduct.id, 1, selectedSize, selectedPickupDate)">
+                            [disabled]="!selectedSize || (isSizeInStock() && !selectedPickupDate)"
+                            [class.disabled]="!selectedSize || (isSizeInStock() && !selectedPickupDate)"
+                            (click)="selectedProduct && selectedSize && buyNow(selectedProduct.id, 1, selectedSize, selectedPickupDate)">
                             <i class="fa-solid fa-bolt"></i>
-                            <span *ngIf="hasAvailableSizes(); else noSizeBuyText">Buy Now</span>
-                            <ng-template #noSizeBuyText>Out of Stock</ng-template>
+                            <span *ngIf="isSizeInStock()">Buy Now</span>
+                            <span *ngIf="!isSizeInStock()">Order for Production</span>
                         </button>
                     </div>
                 </div>

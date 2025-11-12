@@ -374,6 +374,36 @@ logout() {
     return this.getAvailableSizes().length > 0;
   }
 
+  // Get all sizes (both in stock and out of stock) for the currently selected product
+  getAllSizes(): Array<{size: string, inStock: boolean, quantity: number}> {
+    if (!this.selectedProduct) return [];
+    
+    const sizesWithStock = this.getSizesWithStock(this.selectedProduct);
+    return sizesWithStock.map(sizeInfo => ({
+      size: sizeInfo.size,
+      inStock: sizeInfo.inStock,
+      quantity: sizeInfo.quantity
+    }));
+  }
+
+  // Check if the currently selected size is in stock
+  isSizeInStock(): boolean {
+    if (!this.selectedSize || !this.selectedProduct) return true; // Default to true if no size selected
+    
+    const sizesWithStock = this.getSizesWithStock(this.selectedProduct);
+    const selectedSizeInfo = sizesWithStock.find(s => s.size === this.selectedSize);
+    
+    return selectedSizeInfo ? selectedSizeInfo.inStock : false;
+  }
+
+  // Handle size change event
+  onSizeChange(): void {
+    // If the selected size is out of stock, clear the pickup date
+    if (!this.isSizeInStock()) {
+      this.selectedPickupDate = '';
+    }
+  }
+
   // Pickup date properties
   selectedPickupDate: string = '';
   minDate: string = '';
@@ -392,8 +422,11 @@ logout() {
       return;
     }
 
-    // Validate that pickup date is selected
-    if (!pickupDate || pickupDate.trim() === '') {
+    // Check if size is in stock
+    const sizeInStock = this.isSizeInStock();
+
+    // Validate that pickup date is selected only if size is in stock
+    if (sizeInStock && (!pickupDate || pickupDate.trim() === '')) {
       Swal.fire({
         icon: 'warning',
         title: 'Pickup Date Required!',
@@ -404,7 +437,36 @@ logout() {
       return;
     }
 
+    // If size is not in stock, show confirmation dialog
+    if (!sizeInStock) {
+      Swal.fire({
+        title: 'Order for Production',
+        html: `
+          <p>This size is currently out of stock.</p>
+          <p><strong>Your order will be marked as "Pending Production"</strong></p>
+          <p>The admin will process your order once the item is reproduced.</p>
+          <p>You will be notified when it's ready for pickup.</p>
+        `,
+        icon: 'info',
+        showCancelButton: true,
+        confirmButtonText: 'Proceed with Order',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#3085d6',
+        cancelButtonColor: '#d33'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          this.proceedWithCartAdd(productId, quantity, size, pickupDate || '');
+        }
+      });
+      return;
+    }
+
     // Check if same product with same size already exists in cart
+    this.proceedWithCartAdd(productId, quantity, size, pickupDate);
+  }
+
+  // Separate method to handle the actual cart addition
+  private proceedWithCartAdd(productId: number, quantity: number, size: string, pickupDate: string): void {
     const existingCartItem = this.carts?.find(cart => 
       cart.product_id === productId && cart.size === size
     );
@@ -412,10 +474,14 @@ logout() {
     if (existingCartItem) {
       existingCartItem.quantity += quantity;
       this.updateCart(existingCartItem);
+      const message = pickupDate 
+        ? `Product quantity updated in your cart (Size: ${size}, Pickup: ${pickupDate}).`
+        : `Product quantity updated in your cart (Size: ${size}). Order marked for production.`;
+      
       Swal.fire({
         icon: 'success',
         title: 'Cart Updated!',
-        text: `Product quantity updated in your cart (Size: ${size}, Pickup: ${pickupDate}).`,
+        text: message,
         timer: 1200,
         showConfirmButton: false
       }).then(() => {
@@ -426,10 +492,14 @@ logout() {
       // Pass productId, quantity, size, and pickup date to the service
       this.productService.createCart(productId, quantity, size, pickupDate).subscribe((response: any) => {
         this.getCarts();
+        const message = pickupDate 
+          ? `Product added to your cart (Size: ${size}, Pickup: ${pickupDate}).`
+          : `Product added to your cart (Size: ${size}). Order marked for production.`;
+        
         Swal.fire({
           icon: 'success',
           title: 'Added to Cart!',
-          text: `Product added to your cart (Size: ${size}, Pickup: ${pickupDate}).`,
+          text: message,
           timer: 1200,
           showConfirmButton: false
         }).then(() => {
@@ -453,8 +523,11 @@ logout() {
       return;
     }
 
-    // Validate that pickup date is selected
-    if (!pickupDate || pickupDate.trim() === '') {
+    // Check if size is in stock
+    const sizeInStock = this.isSizeInStock();
+
+    // Validate that pickup date is selected only if size is in stock
+    if (sizeInStock && (!pickupDate || pickupDate.trim() === '')) {
       Swal.fire({
         icon: 'warning',
         title: 'Pickup Date Required!',
@@ -465,6 +538,34 @@ logout() {
       return;
     }
 
+    // If size is not in stock, show confirmation dialog
+    if (!sizeInStock) {
+      Swal.fire({
+        title: 'Order for Production',
+        html: `
+          <p>This size is currently out of stock.</p>
+          <p><strong>Your order will be marked as "Pending Production"</strong></p>
+          <p>The admin will process your order once the item is reproduced.</p>
+          <p>You will be notified when it's ready for pickup.</p>
+        `,
+        icon: 'info',
+        showCancelButton: true,
+        confirmButtonText: 'Proceed with Order',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#3085d6',
+        cancelButtonColor: '#d33'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          this.proceedWithBuyNow(productId, quantity, size, pickupDate || '');
+        }
+      });
+      return;
+    }
+
+    this.proceedWithBuyNow(productId, quantity, size, pickupDate);
+  }
+
+  private proceedWithBuyNow(productId: number, quantity: number, size: string, pickupDate: string): void {
     // Show loading indicator
     Swal.fire({
       title: 'Processing...',

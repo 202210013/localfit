@@ -18,7 +18,7 @@
           [class.active]="currentView === 'analytics'" 
           (click)="switchToAnalytics()"
           class="nav-btn">
-          <i class="fa-solid fa-chart-line"></i> Analytics
+          <i class="fa-solid fa-chart-line"></i> Dashboard
         </button>
         <button 
           [class.active]="currentView === 'orders'" 
@@ -306,6 +306,10 @@
           <span class="stat-count">{{ getStatusCount('all') }}</span>
           <span class="stat-label">Total</span>
         </div>
+        <div class="stat-badge pending-production" [class.active]="statusFilter === 'pending-production'" (click)="filterByStatus('pending-production')">
+          <span class="stat-count">{{ getStatusCount('pending-production') }}</span>
+          <span class="stat-label">Pending Production</span>
+        </div>
         <div class="stat-badge pending" [class.active]="statusFilter === 'pending'" (click)="filterByStatus('pending')">
           <span class="stat-count">{{ getStatusCount('pending') }}</span>
           <span class="stat-label">Pending</span>
@@ -343,6 +347,7 @@
       <div class="filter-controls">
         <select [(ngModel)]="statusFilter" (ngModelChange)="filterByStatus(statusFilter)" class="status-filter">
           <option value="all">All Status</option>
+          <option value="pending-production">Pending Production Only</option>
           <option value="pending">Pending Only</option>
           <option value="approved">Approved Only</option>
           <option value="declined">Declined Only</option>
@@ -528,6 +533,10 @@
             <label>Size:</label>
             <span class="size-value">{{ selectedOrder.size }}</span>
           </div>
+          <div class="info-item" *ngIf="selectedOrder.status === 'approved' || selectedOrder.status === 'ready-for-pickup' || selectedOrder.status === 'completed'">
+            <label>Amount Paid:</label>
+            <span class="amount-paid-value">₱{{ getOrderTotal(selectedOrder) | number:'1.2-2' }}</span>
+          </div>
           <div class="info-item" *ngIf="selectedOrder.pickup_date && selectedOrder.status === 'pending'">
             <label>Pickup Date:</label>
             <span class="pickup-date-value">{{ selectedOrder.pickup_date | date:'MMM d, yyyy' }}</span>
@@ -602,6 +611,20 @@
           class="modal-approve-btn">
           <i class="fa-solid fa-check"></i>
           Approve Order
+        </button>
+        <button 
+          (click)="declineOrderFromModal()"
+          class="modal-decline-btn">
+          <i class="fa-solid fa-times"></i>
+          Decline Order
+        </button>
+      </div>
+      <div class="action-section" *ngIf="selectedOrder?.status === 'pending-production'">
+        <button 
+          (click)="acceptProductionOrderFromModal()"
+          class="modal-approve-btn">
+          <i class="fa-solid fa-check-circle"></i>
+          Accept Production Order
         </button>
         <button 
           (click)="declineOrderFromModal()"

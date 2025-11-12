@@ -18,7 +18,7 @@ interface Order {
   quantity: number;
   price?: number; // Add price property
   size?: string; // Add size property
-  status: 'pending' | 'approved' | 'declined' | 'ready-for-pickup' | 'completed';
+  status: 'pending' | 'approved' | 'declined' | 'ready-for-pickup' | 'completed' | 'pending-production';
   vendor?: string; // Add vendor email field
   sellerEmail?: string; // Alternative field name for vendor
   created_at?: string; // Add created date
@@ -2341,6 +2341,7 @@ private fetchYourProductsAndOrders(userEmail: string) {
       case 'approved': return 'status-approved';
       case 'declined': return 'status-declined';
       case 'pending': return 'status-pending';
+      case 'pending-production': return 'status-pending-production';
       case 'ready-for-pickup': return 'status-ready-pickup';
       case 'completed': return 'status-completed';
       default: return '';
@@ -2395,6 +2396,91 @@ private fetchYourProductsAndOrders(userEmail: string) {
     }
   }
 
+  acceptProductionOrderFromModal() {
+    if (!this.selectedOrder) {
+      Swal.fire('Error', 'No order selected', 'error');
+      return;
+    }
+
+    // Capture the order in a local variable to prevent it from being null after modal closes
+    const orderToUpdate = this.selectedOrder;
+
+    Swal.fire({
+      title: 'Accept Production Order',
+      html: `
+        <p style="margin-bottom: 15px;">This order was placed for an out-of-stock size.</p>
+        <p style="margin-bottom: 15px;">Please enter the pickup date now that production is complete:</p>
+        <input type="date" id="production-pickup-date" class="swal2-input" style="width: 80%; margin: 10px auto; display: block;" min="${new Date().toISOString().split('T')[0]}">
+      `,
+      icon: 'info',
+      showCancelButton: true,
+      confirmButtonText: 'Accept Order',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#28a745',
+      preConfirm: () => {
+        const pickupDateInput = document.getElementById('production-pickup-date') as HTMLInputElement;
+        const pickupDate = pickupDateInput?.value;
+        
+        if (!pickupDate) {
+          Swal.showValidationMessage('Please select a pickup date');
+          return false;
+        }
+        
+        return { pickupDate };
+      }
+    }).then((result) => {
+      if (result.isConfirmed && result.value) {
+        this.updateProductionOrderStatus(orderToUpdate, result.value.pickupDate);
+      }
+    });
+  }
+
+  updateProductionOrderStatus(order: Order, pickupDate: string) {
+    const token = localStorage.getItem('token');
+    
+    if (!token) {
+      Swal.fire('Error', 'Authentication required', 'error');
+      return;
+    }
+
+    if (!order || !order.id) {
+      Swal.fire('Error', 'Order information is missing', 'error');
+      return;
+    }
+
+    const headers = new HttpHeaders().set('Authorization', `Bearer ${token}`);
+    
+    this.http.put(`http://localhost:3001/api/orders/${order.id}`, {
+      status: 'ready-for-pickup',
+      pickup_date: pickupDate
+    }, { headers }).subscribe({
+      next: () => {
+        Swal.fire({
+          icon: 'success',
+          title: 'Production Order Accepted!',
+          text: 'Order has been moved to Ready for Pickup status.',
+          timer: 2000,
+          showConfirmButton: false
+        });
+        
+        // Update the order in the local array
+        order.status = 'ready-for-pickup';
+        order.pickup_date = pickupDate;
+        
+        this.closeOrderModal();
+        this.fetchOrders();
+      },
+      error: (err) => {
+        console.error('Error updating production order:', err);
+        Swal.fire({
+          icon: 'error',
+          title: 'Update Failed',
+          text: 'Failed to accept production order. Please try again.'
+        });
+      }
+    });
+  }
+
   // Base URL for images
   private baseUrl: string = 'http://localhost:3001/e-comm-images/';
 
@@ -2445,6 +2531,20 @@ private fetchYourProductsAndOrders(userEmail: string) {
     
     // Prevent further error events on this element
     event.target.onerror = null;
+  }
+
+  // Get order total (price * quantity)
+  getOrderTotal(order: Order): number {
+    if (!order) return 0;
+    
+    // If order has price, use it
+    if (order.price) {
+      return order.price * order.quantity;
+    }
+    
+    // Otherwise, get price from product
+    const productPrice = this.getProductPrice(order.product);
+    return productPrice * order.quantity;
   }
 
   // Method to confirm order pickup by customer from modal

@@ -2686,6 +2686,14 @@ span.approved {
   background: linear-gradient(135deg, #e0a800, #d39e00);
 }
 
+.stat-badge.pending-production {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+
+.stat-badge.pending-production:hover {
+  background: linear-gradient(135deg, #d97706, #b45309);
+}
+
 .stat-badge.declined {
   background: linear-gradient(135deg, #dc3545, #c82333);
 }
@@ -3010,6 +3018,11 @@ span.approved {
 .status-badge.status-pending {
   background: #fff3cd;
   color: #856404;
+}
+
+.status-badge.status-pending-production {
+  background: #fed7aa;
+  color: #92400e;
 }
 
 .status-badge.status-approved {
@@ -4341,6 +4354,18 @@ span.approved {
   display: inline-block;
   width: fit-content;
   box-shadow: 0 2px 4px rgba(40, 167, 69, 0.2);
+}
+
+.amount-paid-value {
+  background: linear-gradient(135deg, #ffc107, #ff9800);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 1.1rem;
+  display: inline-block;
+  width: fit-content;
+  box-shadow: 0 2px 4px rgba(255, 193, 7, 0.3);
 }
 
 .pickup-date-value {
