@@ -9,7 +9,14 @@ interface Message {
   sender: string;
   recipient: string;
   content: string;
-  timestamp?: string | Date; // Add timestamp property
+  timestamp?: string | Date;
+}
+
+interface User {
+  id?: number;
+  name: string;
+  email: string;
+  role?: string;
 }
 
 @Component({
@@ -20,11 +27,11 @@ interface Message {
   styleUrls: ['./message.component.css']
 })
 export class MessageComponent implements OnInit, OnDestroy {
-  userName = localStorage.getItem('user_email') || 'User'; // Use actual email
-  users: { name: string, email: string }[] = [];
+  userName = localStorage.getItem('user_email') || 'User';
+  users: User[] = [];
   messageForm: FormGroup;
   messages: Message[] = [];
-  selectedRecipient: { name: string, email: string } | null = null; // <-- FIXED
+  selectedRecipient: User | null = null;
   searchTerm: string = '';
 
   // Add these properties to your component class
@@ -37,44 +44,18 @@ export class MessageComponent implements OnInit, OnDestroy {
     this.messageForm = this.fb.group({
       content: ['', [Validators.required, Validators.maxLength(250)]]
     });
-    this.socket = io('https://localfit.onrender.com', {
-      transports: ['websocket', 'polling']
-    });
+    this.socket = io('https://localfit.onrender.com');
   }
   ngOnInit() {
-     console.log('Current user from localStorage:', this.userName);
-     
-     // Use local API server to get real users from database
-     this.http.get<{ success: boolean, data: { id: number, name: string, email: string }[] }>('/api/all-users')
-  .subscribe({
-    next: response => {
-      console.log('API Response:', response);
-      if (response.success && response.data) {
-        console.log('Real users loaded from database:', response.data);
-        this.users = response.data;
-        console.log('Users array populated:', this.users);
-      } else {
-        console.error('API response format unexpected:', response);
-        this.users = [];
-      }
-    },
-    error: error => {
-      console.error('Error loading users from database:', error);
-      console.log('Make sure your local Node.js server is running on port 3001');
-      // Fallback to mock data only if local API fails
-      this.users = [
-        { name: 'Test User 1', email: 'test1@example.com' },
-        { name: 'Test User 2', email: 'test2@example.com' }
-      ];
-    }
+     this.http.get<User[]>(`https://api.localfit.store/ecomm_api/all-users?currentUser=${this.userName}`)
+  .subscribe(users => {
+    this.users = users;
   });
 
     this.socket.on('all-messages', (msgs: Message[]) => {
-      console.log('All messages received:', msgs);
       this.messages = msgs;
     });
     this.socket.on('receive-message', (msg: Message) => {
-      console.log('New message received:', msg);
       this.messages.push(msg);
       // Scroll to bottom if the message is for the currently selected conversation
       if (this.selectedRecipient && 
@@ -84,19 +65,6 @@ export class MessageComponent implements OnInit, OnDestroy {
           this.scrollToBottom();
         }, 100);
       }
-    });
-
-    // Add Socket.IO connection logging
-    this.socket.on('connect', () => {
-      console.log('Connected to Socket.IO server');
-    });
-    
-    this.socket.on('disconnect', () => {
-      console.log('Disconnected from Socket.IO server');
-    });
-    
-    this.socket.on('connect_error', (error) => {
-      console.error('Socket.IO connection error:', error);
     });
 
     this.isMobile = window.innerWidth <= 700;
@@ -110,36 +78,30 @@ export class MessageComponent implements OnInit, OnDestroy {
     this.socket.disconnect();
   }
 
-  selectRecipient(user: { name: string, email: string }) {
+  selectRecipient(user: User) {
   if (user.email !== this.userName) {
     this.selectedRecipient = user;
     this.messageForm.reset();
-    // Fetch messages from backend for this conversation  
+    // Fetch messages from backend for this conversation
     this.http.get<Message[]>(
-      `/api/messages?user1=${this.userName}&user2=${user.email}`
-    ).subscribe({
-      next: msgs => {
-        console.log('Messages loaded:', msgs);
-        // Merge new messages, avoid duplicates
-        const all = [...this.messages];
-        msgs.forEach(m => {
-          if (!all.find(existing =>
-            existing.sender === m.sender &&
-            existing.recipient === m.recipient &&
-            existing.content === m.content
-          )) {
-            all.push(m);
-          }
-        });
-        this.messages = all;
-        // Scroll to bottom to show most recent messages
-        setTimeout(() => {
-          this.scrollToBottom();
-        }, 100);
-      },
-      error: error => {
-        console.error('Error loading messages:', error);
-      }
+      `https://api.localfit.store/ecomm_api/messages?user1=${this.userName}&user2=${user.email}`
+    ).subscribe(msgs => {
+      // Merge new messages, avoid duplicates
+      const all = [...this.messages];
+      msgs.forEach(m => {
+        if (!all.find(existing =>
+          existing.sender === m.sender &&
+          existing.recipient === m.recipient &&
+          existing.content === m.content
+        )) {
+          all.push(m);
+        }
+      });
+      this.messages = all;
+      // Scroll to bottom to show most recent messages
+      setTimeout(() => {
+        this.scrollToBottom();
+      }, 100);
     });
     // Close sidebar on mobile
     if (this.isMobile) {
@@ -158,16 +120,9 @@ export class MessageComponent implements OnInit, OnDestroy {
       timestamp: new Date(nowGMT8) // Add current timestamp in GMT+8
     };
     this.socket.emit('send-message', msg);
-    // Save to backend using local API
-     this.http.post('/api/send-message', msg)
-      .subscribe({
-        next: response => {
-          console.log('Message saved to backend:', response);
-        },
-        error: error => {
-          console.error('Error saving message:', error);
-        }
-      });
+    // Save to backend
+     this.http.post('https://api.localfit.store/ecomm_api/send-message', msg)
+      .subscribe();
     this.messageForm.reset();
     // Scroll to bottom to show new message
     setTimeout(() => {
@@ -224,15 +179,11 @@ export class MessageComponent implements OnInit, OnDestroy {
   }
 
   filteredUsers() {
-    console.log('filteredUsers called - Total users:', this.users.length, 'Current user:', this.userName);
-    console.log('All users:', this.users);
     const term = this.searchTerm.toLowerCase();
-    const filtered = this.users.filter(user =>
+    return this.users.filter(user =>
       user.email !== this.userName &&
       (user.name.toLowerCase().includes(term) || user.email.toLowerCase().includes(term))
     );
-    console.log('Filtered users for display:', filtered);
-    return filtered;
   }
 
   // Method to format timestamp for display

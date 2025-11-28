@@ -1,4 +1,5 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, Inject, PLATFORM_ID } from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
 import { Product } from '../models/product.model';
 import { FormGroup, FormControl, FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { ProductService } from '../services/e-comm.service';
@@ -6,6 +7,7 @@ import { CommonModule } from '@angular/common';
 import { Cart } from '../models/cart.models';
 import { AuthService } from '../services/auth.service';
 import { Router } from '@angular/router';
+import { environment } from '../../environments/environment';
 
 
 @Component({
@@ -19,7 +21,7 @@ export class ProductsMainComponent implements OnInit {
   products: Product[] | undefined;
   allProducts: Product[] | undefined;
   productForm: FormGroup = new FormGroup({});
-  baseUrl: string = 'http://localhost:3001/e-comm-images/';
+  baseUrl: string = environment.imageBaseUrl;
   updateMode = false;
   updateForm: FormGroup = new FormGroup({});
   selectedProductId: number | null = null;
@@ -78,7 +80,11 @@ export class ProductsMainComponent implements OnInit {
   }
 
 
-  constructor(private productService: ProductService, private router: Router) { }
+  constructor(
+    private productService: ProductService, 
+    private router: Router,
+    @Inject(PLATFORM_ID) private platformId: Object
+  ) { }
 
   ngOnInit(): void {
     this.productForm = new FormGroup({
@@ -98,10 +104,25 @@ export class ProductsMainComponent implements OnInit {
     this.getAllProducts1();
     this.selectedCategory = 'all';
 
-    window.addEventListener('beforeinstallprompt', (event: any) => {
-      event.preventDefault();
-      this.deferredPrompt = event;
-    });
+    // Only access window in browser environment (not during SSR)
+    if (isPlatformBrowser(this.platformId)) {
+      window.addEventListener('beforeinstallprompt', (event: any) => {
+        event.preventDefault();
+        this.deferredPrompt = event;
+      });
+      
+      // Load visitor counter script
+      this.loadVisitorCounterScript();
+    }
+  }
+
+  // Load visitor counter script dynamically
+  private loadVisitorCounterScript(): void {
+    const script = document.createElement('script');
+    script.type = 'text/javascript';
+    script.src = 'https://www.counter12.com/ad.js?id=8xZ2A5z2AZCCA7wy';
+    script.async = true;
+    document.body.appendChild(script);
   }
 
   goToCart() {

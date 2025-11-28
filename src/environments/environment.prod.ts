@@ -1,6 +1,6 @@
 export const environment = {
   production: true,
-  apiUrl: 'http://localhost:3001/api/',
-  imageBaseUrl: 'http://localhost:3001/e-comm-images/',
-  socketUrl: 'http://localhost:3001'
+  apiUrl: 'https://api.localfit.store/ecomm_api/',
+  imageBaseUrl: 'https://images.localfit.store/',
+  socketUrl: 'https://api.localfit.store'
 };

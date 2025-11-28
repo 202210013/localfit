@@ -105,6 +105,11 @@
                   Customer: {{ getBuyerName(order) }}
                 </p>
                 <p class="quantity">Quantity: {{ order.quantity }}</p>
+                <!-- Show pickup date for ready-for-pickup orders -->
+                <p class="pickup-date-info" *ngIf="order.status === 'ready-for-pickup' && order.pickup_date">
+                  <i class="fa-solid fa-calendar-check"></i>
+                  Pickup Date: <strong>{{ formatPickupDate(order.pickup_date) }}</strong>
+                </p>
                 <!-- Show decline reason for declined orders -->
                 <p class="decline-reason" *ngIf="order.status === 'declined' && order.remarks">
                   <i class="fa-solid fa-info-circle"></i>
@@ -116,6 +121,17 @@
               <div class="order-total">
                 <h3>₱ {{ getTotalPrice(order) }}</h3>
               </div>
+              <!-- Rating button for completed orders -->
+              <button 
+                *ngIf="activeTab === 'completed'" 
+                class="rate-btn" 
+                [class.rated]="order.hasRating"
+                [disabled]="order.hasRating"
+                (click)="rateOrder(order)"
+                [title]="order.hasRating ? 'Already rated' : 'Rate this order'">
+                <i class="fa-solid" [class.fa-star]="!order.hasRating" [class.fa-check]="order.hasRating"></i>
+                {{ order.hasRating ? 'Rated' : 'Rate Order' }}
+              </button>
             </div>
           </div>
         </div>
@@ -124,3 +140,4 @@
 
   </div>
 </div>
+

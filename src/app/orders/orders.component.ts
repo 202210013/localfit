@@ -4,6 +4,7 @@ import { Router } from '@angular/router';
 import { ProductService } from '../services/e-comm.service';
 import { AuthService } from '../services/auth.service';
 import Swal from 'sweetalert2';
+import { environment } from '../../environments/environment';
 
 // Update the Order interface to match your API response
 interface Order {
@@ -20,8 +21,13 @@ interface Order {
   updated_at?: string;
   product_image?: string;
   remarks?: string; // Add remarks for declined orders
+  pickup_date?: string; // Add pickup date field
   // Add calculated price
   calculatedPrice?: number;
+  // Cache product ID for ratings
+  productId?: number;
+  // Track if order has been rated
+  hasRating?: boolean;
 }
 
 @Component({
@@ -36,7 +42,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
   myPurchases: Order[] = []; // Orders made (as buyer)
   allOrders: Order[] = []; // Store all orders before filtering
   activeTab: 'pending' | 'ready-for-pickup' | 'declined' | 'completed' = 'pending';
-  baseUrl: string = 'http://localhost:3001/e-comm-images/';
+  baseUrl: string = environment.imageBaseUrl;
   loading = false;
   
   // Add sorting properties
@@ -189,7 +195,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
       next: (productsResponse: any) => {
         const products = Array.isArray(productsResponse) ? productsResponse : (productsResponse.records || []);
         
-        // Match orders with products to get prices
+        // Match orders with products to get prices AND product IDs
         orders.forEach(order => {
           const matchingProduct = products.find((product: any) => 
             product.name === order.product || 
@@ -200,9 +206,15 @@ export class OrdersComponent implements OnInit, OnDestroy {
           if (matchingProduct) {
             order.calculatedPrice = matchingProduct.price * order.quantity;
             order.product_image = matchingProduct.image;
+            order.productId = matchingProduct.id; // Cache product ID for ratings
           } else {
             // Fallback: assign a default price or keep as undefined
             order.calculatedPrice = 0;
+          }
+          
+          // Check if order has been rated (for completed orders)
+          if (order.status === 'completed') {
+            this.checkOrderRating(order);
           }
         });
       },
@@ -351,6 +363,18 @@ export class OrdersComponent implements OnInit, OnDestroy {
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
   }
 
+  formatPickupDate(dateString: string): string {
+    if (!dateString) return 'Not set';
+    const date = new Date(dateString);
+    const options: Intl.DateTimeFormatOptions = { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    };
+    return date.toLocaleDateString('en-US', options);
+  }
+
   // Helper methods to get the right property names
   getBuyerName(order: Order): string {
     return order.customer || 'Unknown Customer';
@@ -438,4 +462,260 @@ export class OrdersComponent implements OnInit, OnDestroy {
       }
     });
   }
+
+  // Rating functionality
+  rateOrder(order: Order): void {
+    let selectedRating = 0; // Move outside to be accessible in preConfirm
+    
+    Swal.fire({
+      title: '<span style="color: #780001; font-size: 28px; font-weight: 700;">Rate Your Order</span>',
+      html: `
+        <div style="text-align: center; padding: 20px 10px;">
+          <div style="background: linear-gradient(135deg, #f8f9fa, #e9ecef); padding: 20px; border-radius: 12px; margin-bottom: 25px;">
+            <p style="margin: 0 0 8px 0; color: #666; font-size: 15px;">How was your experience with</p>
+            <p style="margin: 0; color: #780001; font-size: 18px; font-weight: 700;">${order.product}</p>
+          </div>
+          
+          <div style="margin: 30px 0;">
+            <p style="margin-bottom: 15px; color: #495057; font-weight: 600; font-size: 16px;">Select Your Rating</p>
+            <div class="star-rating" id="starRating" style="font-size: 3rem; cursor: pointer; display: flex; justify-content: center; gap: 8px;">
+              <i class="fa-regular fa-star" data-rating="1" style="transition: all 0.2s ease; color: #ddd;"></i>
+              <i class="fa-regular fa-star" data-rating="2" style="transition: all 0.2s ease; color: #ddd;"></i>
+              <i class="fa-regular fa-star" data-rating="3" style="transition: all 0.2s ease; color: #ddd;"></i>
+              <i class="fa-regular fa-star" data-rating="4" style="transition: all 0.2s ease; color: #ddd;"></i>
+              <i class="fa-regular fa-star" data-rating="5" style="transition: all 0.2s ease; color: #ddd;"></i>
+            </div>
+            <p id="ratingLabel" style="margin-top: 12px; color: #6c757d; font-size: 14px; min-height: 20px; font-weight: 500;"></p>
+          </div>
+          
+          <div style="text-align: left; margin-top: 25px;">
+            <label style="display: block; margin-bottom: 10px; color: #495057; font-weight: 600; font-size: 15px;">
+              <i class="fa-solid fa-comment-dots" style="color: #780001; margin-right: 6px;"></i>
+              Share Your Experience (Optional)
+            </label>
+            <textarea 
+              id="reviewText" 
+              class="swal2-textarea" 
+              placeholder="Tell us what you liked or what could be improved..." 
+              style="width: 100%; min-height: 100px; max-height: 100px; margin: 0; resize: none; border: 2px solid #dee2e6; border-radius: 8px; padding: 12px; font-size: 14px; line-height: 1.5; overflow: hidden; box-sizing: border-box; display: block;"
+              maxlength="500"></textarea>
+            <small style="color: #6c757d; font-size: 12px; display: block; text-align: right; margin-top: 6px;">
+              <span id="charCount">0</span>/500 characters
+            </small>
+          </div>
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: '<i class="fa-solid fa-paper-plane"></i> Submit Rating',
+      cancelButtonText: '<i class="fa-solid fa-times"></i> Cancel',
+      confirmButtonColor: '#780001',
+      cancelButtonColor: '#6c757d',
+      width: '90%',
+      customClass: {
+        popup: 'rating-modal-popup',
+        confirmButton: 'rating-confirm-btn',
+        cancelButton: 'rating-cancel-btn'
+      },
+      didOpen: () => {
+        const stars = document.querySelectorAll('.star-rating i');
+        const ratingLabel = document.getElementById('ratingLabel');
+        const reviewText = document.getElementById('reviewText') as HTMLTextAreaElement;
+        const charCount = document.getElementById('charCount');
+        
+        const ratingLabels = ['', 'Poor', 'Fair', 'Good', 'Very Good', 'Excellent'];
+        const ratingColors = ['', '#dc3545', '#fd7e14', '#ffc107', '#20c997', '#28a745'];
+        
+        // Character counter
+        if (reviewText && charCount) {
+          reviewText.addEventListener('input', () => {
+            charCount.textContent = reviewText.value.length.toString();
+          });
+        }
+        
+        stars.forEach((star: any) => {
+          // Click event
+          star.addEventListener('click', () => {
+            selectedRating = parseInt(star.getAttribute('data-rating'));
+            console.log('⭐ Rating selected:', selectedRating);
+            
+            // Update stars
+            stars.forEach((s: any, index) => {
+              if (index < selectedRating) {
+                s.classList.remove('fa-regular');
+                s.classList.add('fa-solid');
+                s.style.color = '#FFD700';
+                s.style.transform = 'scale(1.1)';
+              } else {
+                s.classList.remove('fa-solid');
+                s.classList.add('fa-regular');
+                s.style.color = '#ddd';
+                s.style.transform = 'scale(1)';
+              }
+            });
+            
+            // Update label
+            if (ratingLabel) {
+              ratingLabel.textContent = ratingLabels[selectedRating];
+              ratingLabel.style.color = ratingColors[selectedRating];
+              ratingLabel.style.fontWeight = '700';
+              ratingLabel.style.fontSize = '16px';
+            }
+          });
+          
+          // Hover effect
+          star.addEventListener('mouseenter', () => {
+            const hoverRating = parseInt(star.getAttribute('data-rating'));
+            stars.forEach((s: any, index) => {
+              if (index < hoverRating) {
+                s.style.color = '#FFD700';
+                s.style.transform = 'scale(1.15)';
+              } else {
+                if (index < selectedRating) {
+                  s.style.color = '#FFD700';
+                } else {
+                  s.style.color = '#ddd';
+                }
+                s.style.transform = 'scale(1)';
+              }
+            });
+            
+            // Show preview label
+            if (ratingLabel && hoverRating > selectedRating) {
+              ratingLabel.textContent = ratingLabels[hoverRating];
+              ratingLabel.style.color = ratingColors[hoverRating];
+              ratingLabel.style.opacity = '0.7';
+            }
+          });
+        });
+        
+        // Mouse leave - restore selected state
+        document.querySelector('.star-rating')?.addEventListener('mouseleave', () => {
+          stars.forEach((s: any, index) => {
+            if (index < selectedRating) {
+              s.style.color = '#FFD700';
+              s.style.transform = 'scale(1.1)';
+            } else {
+              s.style.color = '#ddd';
+              s.style.transform = 'scale(1)';
+            }
+          });
+          
+          // Restore label
+          if (ratingLabel) {
+            if (selectedRating > 0) {
+              ratingLabel.textContent = ratingLabels[selectedRating];
+              ratingLabel.style.color = ratingColors[selectedRating];
+              ratingLabel.style.opacity = '1';
+            } else {
+              ratingLabel.textContent = '';
+            }
+          }
+        });
+      },
+      preConfirm: () => {
+        const review = (document.getElementById('reviewText') as HTMLTextAreaElement)?.value || '';
+        
+        console.log('📝 PreConfirm - Selected rating:', selectedRating);
+        console.log('📝 Review text:', review);
+        
+        if (selectedRating === 0) {
+          Swal.showValidationMessage('Please select a rating (1-5 stars)');
+          return false;
+        }
+        
+        return { rating: selectedRating, review };
+      }
+    }).then((result) => {
+      if (result.isConfirmed && result.value) {
+        console.log('✅ Submitting rating:', result.value);
+        this.submitRating(order, result.value.rating, result.value.review);
+      }
+    });
+  }
+
+  private submitRating(order: Order, rating: number, review: string): void {
+    const productId = this.getProductIdFromOrder(order);
+    
+    console.log('📤 Submitting rating to API:', {
+      orderId: order.id,
+      productId: productId,
+      rating: rating,
+      review: review
+    });
+    
+    if (productId === 0) {
+      console.error('❌ Product ID is 0 - cannot submit rating');
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'Product information not found. Please refresh and try again.',
+        confirmButtonColor: '#780001'
+      });
+      return;
+    }
+    
+    this.productService.submitRating(order.id, productId, rating, review).subscribe({
+      next: (response) => {
+        console.log('✅ Rating submitted successfully:', response);
+        // Mark order as rated immediately
+        order.hasRating = true;
+        Swal.fire({
+          icon: 'success',
+          title: 'Thank You!',
+          text: 'Your rating has been submitted successfully.',
+          confirmButtonColor: '#780001'
+        });
+      },
+      error: (error) => {
+        console.error('❌ Error submitting rating:', error);
+        let errorMessage = 'Failed to submit rating. ';
+        
+        if (error.status === 0) {
+          errorMessage += 'Server is not responding. Please ensure the Node.js server is running.';
+        } else if (error.status === 401) {
+          errorMessage += 'Please login again.';
+        } else if (error.status === 400 && error.error?.error) {
+          errorMessage += error.error.error;
+        } else {
+          errorMessage += 'Please try again.';
+        }
+        
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: errorMessage,
+          confirmButtonColor: '#780001'
+        });
+      }
+    });
+  }
+
+  private getProductIdFromOrder(order: Order): number {
+    // Return cached product ID from enrichOrdersWithPrices
+    // If not available, return 0 (should trigger an error in the API)
+    return order.productId || 0;
+  }
+
+  // Check if order has been rated
+  private checkOrderRating(order: Order): void {
+    this.productService.getRatingsByOrder(order.id).subscribe({
+      next: (response: any) => {
+        if (response.success && response.rating) {
+          order.hasRating = true;
+        } else {
+          order.hasRating = false;
+        }
+      },
+      error: (error) => {
+        // If error, assume not rated (allow rating attempt)
+        order.hasRating = false;
+      }
+    });
+  }
+
+  // Check if order can be rated
+  canRateOrder(order: Order): boolean {
+    return !order.hasRating;
+  }
 }
+

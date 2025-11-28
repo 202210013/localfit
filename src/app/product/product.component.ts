@@ -7,6 +7,7 @@ import { Cart } from '../models/cart.models';
 import { AuthService } from '../services/auth.service';
 import { Router } from '@angular/router';
 import Swal from 'sweetalert2';
+import { environment } from '../../environments/environment';
 
 @Component({
     selector: 'app-product',
@@ -19,7 +20,7 @@ export class ProductComponent implements OnInit {
     products: Product[] | undefined;
     allProducts: Product[] | undefined;
     productForm: FormGroup = new FormGroup({});
-    baseUrl: string = 'http://localhost:3001/e-comm-images/';
+    baseUrl: string = environment.imageBaseUrl;
     updateMode = false;
     updateForm: FormGroup = new FormGroup({});
     selectedProductId: number | null = null;
@@ -71,6 +72,52 @@ export class ProductComponent implements OnInit {
         this.isModalOpen = false;
         this.selectedProduct = undefined;
         this.resetForms();
+    }
+
+    clearCreateForm() {
+        this.productForm.reset({
+            name: '',
+            price: '',
+            description: '',
+            image: '',
+            category: this.categories[0]
+        });
+        this.createImagePreview = null;
+        this.selectedSizes = [];
+        this.sizeQuantities = {};
+        this.fileName = '';
+        
+        // Reset file input
+        const fileInput = document.getElementById('productImage') as HTMLInputElement;
+        if (fileInput) {
+            fileInput.value = '';
+        }
+    }
+
+    autoResize(event: Event) {
+        const textarea = event.target as HTMLTextAreaElement;
+        textarea.style.height = 'auto';
+        textarea.style.height = textarea.scrollHeight + 'px';
+    }
+
+    clearEditForm() {
+        this.updateForm.reset({
+            name: '',
+            price: '',
+            description: '',
+            image: '',
+            category: this.categories[0]
+        });
+        this.editImagePreview = null;
+        this.editSelectedSizes = [];
+        this.editSizeQuantities = {};
+        this.fileName = '';
+        
+        // Reset file input
+        const fileInput = document.getElementById('editProductImage') as HTMLInputElement;
+        if (fileInput) {
+            fileInput.value = '';
+        }
     }
 
     resetForms() {
@@ -246,14 +293,25 @@ export class ProductComponent implements OnInit {
         if (totalQty < 5) return 'low-stock';
         return 'in-stock';
     }
+    
+    // Mobile menu state
+    mobileMenuOpen: boolean = false;
 
     constructor(private productService: ProductService, public authService: AuthService, private router: Router) { }
 
     ngOnInit(): void {
+        const defaultSizeChart = `Size Chart:
+
+Size        Chest Width (Inches)    Body Length (Inches)
+Small       18                      28
+Medium      20                      29
+Large       22                      30
+X-Large     24                      31`;
+
         this.productForm = new FormGroup({
             name: new FormControl(''),
             price: new FormControl(''),
-            description: new FormControl(''),
+            description: new FormControl(defaultSizeChart),
             image: new FormControl(''),
             category: new FormControl(this.categories[0]) // Default to first category instead of [9]
         });
@@ -311,6 +369,15 @@ export class ProductComponent implements OnInit {
 
     goToAdmin() {
         this.router.navigate(['/admin']);
+    }
+    
+    // Mobile menu methods
+    toggleMobileMenu() {
+        this.mobileMenuOpen = !this.mobileMenuOpen;
+    }
+    
+    closeMobileMenu() {
+        this.mobileMenuOpen = false;
     }
 
     getImageUrl(imagePath: string): string {

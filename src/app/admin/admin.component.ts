@@ -4,9 +4,12 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import * as XLSX from 'xlsx';
+import * as ExcelJS from 'exceljs';
 import * as FileSaver from 'file-saver';
 import Swal from 'sweetalert2';
 import { ProductService } from '../services/e-comm.service';
+import { environment } from '../../environments/environment';
+import { MessageComponent } from '../message/message.component';
 
 interface Order {
   id: number;
@@ -36,6 +39,19 @@ interface Product {
   image: string;
   userEmail: string;
   created_at?: string;
+}
+
+interface Rating {
+  id: number;
+  order_id: number;
+  product_id: number;
+  user_id: number;
+  rating: number;
+  review: string;
+  created_at: string;
+  user_name?: string;
+  user_email?: string;
+  product_name?: string;
 }
 
 interface SalesAnalytics {
@@ -90,11 +106,15 @@ interface ProfessionalReport {
 @Component({
   selector: 'app-admin',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, MessageComponent],
   templateUrl: './admin.component.html',
   styleUrls: ['./admin.component.css']
 })
 export class AdminComponent implements OnInit {
+  // API and Base URLs
+  private apiUrl: string = environment.apiUrl;
+  private baseUrl: string = environment.imageBaseUrl;
+  
   orders: Order[] = [];
   customerOrders: Order[] = []; // Add this for filtered orders
   products: Product[] = [];
@@ -146,7 +166,24 @@ export class AdminComponent implements OnInit {
   };
   
   // View state management
-  currentView: 'orders' | 'analytics' | 'report' = 'analytics';
+  currentView: 'orders' | 'analytics' | 'report' | 'ratings' | 'messages' | 'inventory' = 'analytics';
+  
+  // Ratings data
+  ratings: Rating[] = [];
+  filteredRatings: Rating[] = [];
+  ratingsLoading: boolean = false;
+  ratingSearchTerm: string = '';
+  ratingFilterRating: string = 'all'; // all, 5, 4, 3, 2, 1
+  
+  // Inventory data
+  inventoryItems: any[] = [];
+  filteredInventory: any[] = [];
+  inventoryLoading: boolean = false;
+  inventorySearchTerm: string = '';
+  showAddStockModal: boolean = false;
+  selectedInventoryItem: any = null;
+  addStockQuantity: number = 0;
+  showOnlyLowStock: boolean = false;
   
   // Date filter for analytics
   dateFilter: 'today' | 'week' | 'month' | 'year' | 'all' = 'month';
@@ -164,6 +201,7 @@ export class AdminComponent implements OnInit {
   filteredOrders: Order[] = [];
   searchTerm: string = '';
   statusFilter: string = 'all';
+  sizeFilter: string = 'all';
 
   // Order details modal properties
   showOrderModal: boolean = false;
@@ -178,6 +216,11 @@ export class AdminComponent implements OnInit {
   showRemarksModal: boolean = false;
   completionRemarks: string = '';
   remarksOrder: Order | null = null;
+  selectedSize: string = '';
+  availableSizes: string[] = [];
+  
+  // Mobile menu state
+  mobileMenuOpen: boolean = false;
 
   constructor(private http: HttpClient, private router: Router, private productService: ProductService) {}
 
@@ -193,23 +236,249 @@ export class AdminComponent implements OnInit {
     this.calculateAnalytics();
   }
 
+  switchToInventory() {
+    this.currentView = 'inventory';
+    this.closeMobileMenu();
+    this.fetchInventory();
+  }
+
+  filterInventory() {
+    const term = this.inventorySearchTerm.toLowerCase();
+    let filtered = this.inventoryItems;
+    
+    // Apply search filter
+    if (term) {
+      filtered = filtered.filter((i: any) => 
+        i.product.name.toLowerCase().includes(term) || 
+        i.sizes.some((s: any) => s.size.toLowerCase().includes(term))
+      );
+    }
+    
+    // Apply low stock filter
+    if (this.showOnlyLowStock) {
+      filtered = filtered.map((i: any) => ({
+        ...i,
+        sizes: i.sizes.filter((s: any) => s.current < 10)
+      })).filter((i: any) => i.sizes.length > 0);
+    }
+    
+    this.filteredInventory = filtered;
+  }
+
+  toggleLowStockFilter() {
+    this.showOnlyLowStock = !this.showOnlyLowStock;
+    this.filterInventory();
+  }
+
+  getLowStockCount(): number {
+    let count = 0;
+    this.inventoryItems.forEach((i: any) => {
+      i.sizes.forEach((s: any) => {
+        if (s.current < 10) {
+          count++;
+        }
+      });
+    });
+    return count;
+  }
+
+  fetchInventory() {
+    this.inventoryLoading = true;
+    this.productService.getAllProducts().subscribe({
+      next: (resp: any) => {
+        const records = resp.records || resp;
+        this.inventoryItems = records.map((p: any) => {
+          // parse size_quantities and starting_size_quantities if present
+          let sizeQuantities: any = {};
+          if (p.size_quantities) {
+            if (typeof p.size_quantities === 'string') {
+              try { sizeQuantities = JSON.parse(p.size_quantities); } catch { sizeQuantities = {}; }
+            } else if (typeof p.size_quantities === 'object') {
+              sizeQuantities = p.size_quantities;
+            }
+          }
+
+          let startingQuantities: any = {};
+          if (p.starting_size_quantities) {
+            if (typeof p.starting_size_quantities === 'string') {
+              try { startingQuantities = JSON.parse(p.starting_size_quantities); } catch { startingQuantities = {}; }
+            } else if (typeof p.starting_size_quantities === 'object') {
+              startingQuantities = p.starting_size_quantities;
+            }
+          }
+
+          const available_sizes = p.available_sizes || [];
+          // build rows per size
+          const sizes = available_sizes.map((s: string) => {
+            const starting = startingQuantities[s] != null ? Number(startingQuantities[s]) : (sizeQuantities[s] != null ? Number(sizeQuantities[s]) : 0);
+            const current = sizeQuantities[s] != null ? Number(sizeQuantities[s]) : 0;
+            
+            // Calculate confirmed orders (ready-for-pickup only) for this product and size
+            const confirmedOrders = this.customerOrders.filter(order => 
+              order.product === p.name && 
+              order.size === s &&
+              order.status === 'ready-for-pickup'
+            ).length;
+            
+            // Calculate sold (completed orders only) for this product and size
+            const sold = this.customerOrders.filter(order => 
+              order.product === p.name && 
+              order.size === s &&
+              order.status === 'completed'
+            ).length;
+            
+            return {
+              productId: p.id,
+              productName: p.name,
+              size: s,
+              starting: starting,
+              current: current,
+              confirmedOrders: confirmedOrders,
+              sold: sold
+            };
+          });
+
+          return { product: p, sizes };
+        });
+        this.filteredInventory = this.inventoryItems;
+        this.inventoryLoading = false;
+      },
+      error: (err: any) => {
+        console.error('Error fetching inventory:', err);
+        this.inventoryLoading = false;
+      }
+    });
+  }
+
+  openAddStockModal(item: any) {
+    this.selectedInventoryItem = item;
+    this.addStockQuantity = 0;
+    this.showAddStockModal = true;
+  }
+
+  closeAddStockModal() {
+    this.showAddStockModal = false;
+    this.selectedInventoryItem = null;
+    this.addStockQuantity = 0;
+  }
+
+  confirmAddStock() {
+    if (!this.selectedInventoryItem || !this.addStockQuantity || this.addStockQuantity <= 0) {
+      Swal.fire('Invalid', 'Please enter a valid quantity', 'warning');
+      return;
+    }
+
+    const productId = this.selectedInventoryItem.productId;
+    const size = this.selectedInventoryItem.size;
+    
+    // Debug: Check token availability
+    const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+    console.log('ConfirmAddStock - Token available:', token ? 'YES' : 'NO');
+    console.log('ConfirmAddStock - Product ID:', productId);
+    console.log('ConfirmAddStock - Size:', size);
+    console.log('ConfirmAddStock - Quantity to add:', this.addStockQuantity);
+
+    // Find the product object in inventoryItems
+    const productEntry = this.inventoryItems.find((i: any) => i.product.id === productId);
+    if (!productEntry) { Swal.fire('Error', 'Product not found', 'error'); return; }
+
+    // Prepare updated size_quantities and starting_size_quantities
+    const sizeQuantities = {} as any;
+    const startingQuantities = {} as any;
+
+    // load existing quantities from productEntry.product
+    const p = productEntry.product;
+    let existingSizeQuantities: any = {};
+    if (p.size_quantities) {
+      if (typeof p.size_quantities === 'string') {
+        try { existingSizeQuantities = JSON.parse(p.size_quantities); } catch { existingSizeQuantities = {}; }
+      } else if (typeof p.size_quantities === 'object') {
+        existingSizeQuantities = p.size_quantities;
+      }
+    }
+    let existingStarting: any = {};
+    if (p.starting_size_quantities) {
+      if (typeof p.starting_size_quantities === 'string') {
+        try { existingStarting = JSON.parse(p.starting_size_quantities); } catch { existingStarting = {}; }
+      } else if (typeof p.starting_size_quantities === 'object') {
+        existingStarting = p.starting_size_quantities;
+      }
+    }
+
+    // copy existing for all sizes
+    (p.available_sizes || []).forEach((s: string) => {
+      sizeQuantities[s] = Number(existingSizeQuantities[s] || 0);
+      startingQuantities[s] = Number(existingStarting[s] || sizeQuantities[s] || 0);
+    });
+
+    // apply added quantity
+    sizeQuantities[size] = Number(sizeQuantities[size] || 0) + Number(this.addStockQuantity);
+    startingQuantities[size] = Number(startingQuantities[size] || 0) + Number(this.addStockQuantity);
+
+    // build FormData and send update
+    const formData = new FormData();
+    formData.append('size_quantities', JSON.stringify(sizeQuantities));
+    formData.append('starting_size_quantities', JSON.stringify(startingQuantities));
+
+    this.productService.updateProduct(productId, formData).subscribe({
+      next: (res: any) => {
+        Swal.fire({ icon: 'success', title: 'Stock updated', timer: 1200, showConfirmButton: false });
+        // update local model
+        productEntry.sizes = productEntry.sizes.map((r: any) => {
+          if (r.size === size) {
+            r.starting = startingQuantities[size];
+            r.current = sizeQuantities[size];
+            r.sold = Math.max(0, r.starting - r.current);
+          }
+          return r;
+        });
+        // also update raw product fields so future edits use correct values
+        productEntry.product.size_quantities = sizeQuantities;
+        productEntry.product.starting_size_quantities = startingQuantities;
+        this.closeAddStockModal();
+      },
+      error: (err: any) => {
+        console.error('Error updating stock:', err);
+        Swal.fire('Error', 'Failed to update stock', 'error');
+      }
+    });
+  }
+
   // View switching methods
   switchToOrders() {
     this.currentView = 'orders';
+    this.closeMobileMenu();
   }
 
   switchToAnalytics() {
     this.currentView = 'analytics';
     this.calculateAnalytics();
+    this.closeMobileMenu();
   }
 
   switchToReport() {
     this.currentView = 'report';
     this.generateProfessionalReport();
+    this.closeMobileMenu();
   }
 
   switchToProducts() {
     this.goToProduct();
+    this.closeMobileMenu();
+  }
+
+  switchToMessages() {
+    this.currentView = 'messages';
+    this.closeMobileMenu();
+  }
+  
+  // Mobile menu methods
+  toggleMobileMenu() {
+    this.mobileMenuOpen = !this.mobileMenuOpen;
+  }
+  
+  closeMobileMenu() {
+    this.mobileMenuOpen = false;
   }
 
   goToProduct() {
@@ -442,7 +711,7 @@ private fetchYourProductsAndOrders(userEmail: string) {
   
   // Get your products first
   this.http.get<any>(
-    `http://localhost:3001/api/products?seller=${encodeURIComponent(userEmail)}`,
+    `${this.apiUrl}products?seller=${encodeURIComponent(userEmail)}`,
     { 
       withCredentials: true,
       headers: this.getHeaders()
@@ -464,11 +733,11 @@ private fetchYourProductsAndOrders(userEmail: string) {
       // Check different possible field names for product names
       const yourProductNames = products.map(p => {
         const productName = p.name || p.title || p.product_name || p.productName || p.Name || p.Title || p.Product;
-        console.log('Product object:', p, 'Extracted name:', productName);
+        // console.log('Product object:', p, 'Extracted name:', productName);
         return productName;
       }).filter(name => name && name.trim() !== ''); // Remove undefined/empty values
       
-      console.log('Your product names extracted:', yourProductNames);
+      // console.log('Your product names extracted:', yourProductNames);
       
       if (yourProductNames.length === 0) {
         console.log('Could not extract any product names from your products!');
@@ -478,18 +747,18 @@ private fetchYourProductsAndOrders(userEmail: string) {
       
       // Now fetch orders
       this.http.get<any[]>(
-        `http://localhost:3001/api/orders`,
+        `${this.apiUrl}orders`,
         { 
           withCredentials: true,
           headers: this.getHeaders()
         }
       ).subscribe({
         next: (orders) => {
-          console.log('All orders:', orders);
+          // console.log('All orders:', orders);
           
           // Show all unique product names in orders
           const orderProductNames = [...new Set(orders.map(order => order.product))];
-          console.log('All product names in orders:', orderProductNames);
+          // console.log('All product names in orders:', orderProductNames);
           
           this.orders = orders;
           
@@ -506,7 +775,7 @@ private fetchYourProductsAndOrders(userEmail: string) {
               );
             }
             
-            console.log(`Order ${order.id} - Product: "${order.product}" - Is yours: ${isYourProduct}`);
+            // console.log(`Order ${order.id} - Product: "${order.product}" - Is yours: ${isYourProduct}`);
             return isYourProduct;
           });
           
@@ -520,7 +789,7 @@ private fetchYourProductsAndOrders(userEmail: string) {
             console.log('Check if any of your product names match the order product names above');
           } else {
             console.log('=== YOUR FILTERED ORDERS ===');
-            console.log(this.customerOrders);
+            // console.log(this.customerOrders);
           }
           
           // Initialize filtered orders for sorting/filtering
@@ -562,7 +831,7 @@ private fetchYourProductsAndOrders(userEmail: string) {
     order.status = 'ready-for-pickup';
     
     this.http.post(
-      `http://localhost:3001/api/orders?admin=${encodeURIComponent(userEmail ?? '')}`,
+      `${this.apiUrl}orders?admin=${encodeURIComponent(userEmail ?? '')}`,
       { 
         action: 'approve', 
         orderId: order.id,
@@ -583,6 +852,8 @@ private fetchYourProductsAndOrders(userEmail: string) {
         this.fetchOrders(); // Refresh the orders list after approval
         // Recalculate analytics to include approved order
         this.calculateAnalytics();
+        // Refresh inventory to update confirmed orders count
+        this.fetchInventory();
       },
       error: (err) => {
         console.error('Approve order error:', err);
@@ -648,7 +919,7 @@ private fetchYourProductsAndOrders(userEmail: string) {
     order.remarks = remarks;
     
     this.http.post(
-      `http://localhost:3001/api/orders?admin=${encodeURIComponent(userEmail ?? '')}`,
+      `${this.apiUrl}orders?admin=${encodeURIComponent(userEmail ?? '')}`,
       { 
         action: 'decline', 
         orderId: order.id,
@@ -683,6 +954,8 @@ private fetchYourProductsAndOrders(userEmail: string) {
             this.fetchOrders(); // Refresh the orders list after decline
             // Recalculate analytics to reflect declined order
             this.calculateAnalytics();
+            // Refresh inventory to update confirmed orders count
+            this.fetchInventory();
           } else {
             console.error('Invalid response structure:', parsedResponse);
             throw new Error('Invalid response from server');
@@ -736,7 +1009,7 @@ private fetchYourProductsAndOrders(userEmail: string) {
     
     // Call the backend API with the correct action
     this.http.post(
-      `http://localhost:3001/api/orders?admin=${encodeURIComponent(userEmail ?? '')}`,
+      `${this.apiUrl}orders?admin=${encodeURIComponent(userEmail ?? '')}`,
       { 
         action: 'ready-for-pickup', 
         orderId: order.id
@@ -769,26 +1042,198 @@ private fetchYourProductsAndOrders(userEmail: string) {
     });
   }
 
-  exportToExcel(): void {
-    // Export only customer orders
-    const exportData = this.customerOrders.map(order => ({
-      'Order #': order.id,
-      'Customer': order.customer,
-      'Product': order.product,
-      'Quantity': order.quantity,
-      'Size': order.size || 'N/A',
-      'Status': order.status
-    }));
-
-    const worksheet: XLSX.WorkSheet = XLSX.utils.json_to_sheet(exportData);
-    const workbook: XLSX.WorkBook = { Sheets: { 'Orders': worksheet }, SheetNames: ['Orders'] };
-    const excelBuffer: any = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-    const data: Blob = new Blob([excelBuffer], { type: 'application/octet-stream' });
-    FileSaver.saveAs(data, 'customer_orders.xlsx');
+  async exportToExcel(): Promise<void> {
+    // Create workbook with ExcelJS
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Orders');
+    
+    // Fetch logo image and add to workbook
+    try {
+      const response = await fetch('https://i.ibb.co/MyHC2QgX/GPS-HIT-FIT-LOGO.png');
+      const blob = await response.blob();
+      const arrayBuffer = await blob.arrayBuffer();
+      
+      const imageId = workbook.addImage({
+        buffer: arrayBuffer,
+        extension: 'png',
+      });
+      
+      // Add logo image (spanning rows 1-5, columns A-B)
+      worksheet.addImage(imageId, {
+        tl: { col: 0, row: 0 },
+        ext: { width: 250, height: 100 }
+      });
+      
+      // Set row heights for logo area
+      worksheet.getRow(1).height = 20;
+      worksheet.getRow(2).height = 20;
+      worksheet.getRow(3).height = 20;
+      worksheet.getRow(4).height = 20;
+      worksheet.getRow(5).height = 20;
+      
+    } catch (error) {
+      console.error('Error loading logo:', error);
+    }
+    
+    // Add company name with styling
+    worksheet.mergeCells('C1:F2');
+    const companyCell = worksheet.getCell('C1');
+    companyCell.value = 'GPS HIT FIT SPORTS APPAREL';
+    companyCell.font = { name: 'Arial', size: 20, bold: true, color: { argb: 'FF780001' } };
+    companyCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    companyCell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFFFD700' }
+    };
+    
+    // Add report title
+    worksheet.mergeCells('A6:F6');
+    const titleCell = worksheet.getCell('A6');
+    titleCell.value = 'CUSTOMER ORDERS REPORT';
+    titleCell.font = { name: 'Arial', size: 16, bold: true };
+    titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    titleCell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E0E0' }
+    };
+    
+    // Add generation date
+    worksheet.mergeCells('A7:F7');
+    const dateCell = worksheet.getCell('A7');
+    dateCell.value = `Generated: ${new Date().toLocaleString('en-US')}`;
+    dateCell.font = { name: 'Arial', size: 11 };
+    dateCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    
+    // Add empty row
+    worksheet.addRow([]);
+    
+    // Add headers
+    const headerRow = worksheet.addRow(['Order #', 'Customer', 'Product', 'Quantity', 'Size', 'Status']);
+    headerRow.font = { bold: true, size: 12 };
+    headerRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFCCCCCC' }
+    };
+    headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
+    
+    // Add data rows
+    this.customerOrders.forEach(order => {
+      const row = worksheet.addRow([
+        order.id,
+        order.customer,
+        order.product,
+        order.quantity,
+        order.size || 'N/A',
+        order.status
+      ]);
+      row.alignment = { horizontal: 'left', vertical: 'middle' };
+    });
+    
+    // Auto-fit and align all columns
+    this.autoFitColumns(worksheet);
+    
+    // Generate and download
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    FileSaver.saveAs(blob, 'customer_orders.xlsx');
   }
 
-  // Export Order Management Report based on current filters
-  exportOrderManagementReport(): void {
+  // Export Order Management Report based on current filters with logo
+  async exportOrderManagementReport(): Promise<void> {
+    const ordersToExport = this.filteredOrders;
+    
+    if (ordersToExport.length === 0) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'No Orders to Export',
+        text: 'No orders match the current filters.',
+        timer: 3000,
+        showConfirmButton: false
+      });
+      return;
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Order Management');
+    
+    // Add logo and header
+    const startRow = await this.addLogoHeader(worksheet, 'ORDER MANAGEMENT REPORT');
+    
+    // Calculate metrics
+    const currentDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const totalRevenue = ordersToExport
+      .filter(o => o.status === 'approved' || o.status === 'ready-for-pickup' || o.status === 'completed')
+      .reduce((sum, order) => sum + this.getProductPrice(order.product), 0);
+    
+    const pendingCount = ordersToExport.filter(o => o.status === 'pending').length;
+    const completedCount = ordersToExport.filter(o => o.status === 'completed').length;
+    
+    // Add summary section
+    let currentRow = startRow;
+    worksheet.mergeCells(currentRow, 1, currentRow, 6);
+    const summaryTitle = worksheet.getCell(currentRow, 1);
+    summaryTitle.value = 'REPORT SUMMARY';
+    summaryTitle.font = { bold: true, size: 14 };
+    summaryTitle.alignment = { horizontal: 'center' };
+    summaryTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFCCCCCC' } };
+    currentRow++;
+    
+    worksheet.addRow(['Total Orders:', ordersToExport.length, '', 'Total Revenue:', `₱${totalRevenue.toFixed(2)}`]);
+    worksheet.addRow(['Pending:', pendingCount, '', 'Completed:', completedCount]);
+    worksheet.addRow(['Status Filter:', this.statusFilter === 'all' ? 'All' : this.statusFilter.toUpperCase()]);
+    worksheet.addRow(['Size Filter:', this.sizeFilter === 'all' ? 'All' : this.sizeFilter]);
+    worksheet.addRow([]);
+    currentRow += 4;
+    
+    // Add order details header
+    const headerRow = worksheet.addRow(['Order #', 'Customer', 'Product', 'Size', 'Status', 'Date']);
+    headerRow.font = { bold: true, size: 12 };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFCCCCCC' } };
+    headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
+    
+    // Add orders
+    ordersToExport.forEach(order => {
+      worksheet.addRow([
+        order.id,
+        order.customer_name || order.customer,
+        order.product,
+        order.size || 'N/A',
+        order.status.toUpperCase(),
+        this.getOrderDate(order)
+      ]);
+    });
+    
+    // Auto-fit and align all columns
+    this.autoFitColumns(worksheet);
+    
+    // Generate filename
+    let filename = 'Order_Management_Report';
+    if (this.statusFilter !== 'all') {
+      filename += `_${this.statusFilter.toUpperCase()}`;
+    }
+    if (this.sizeFilter !== 'all') {
+      filename += `_Size_${this.sizeFilter.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    }
+    filename += `_${new Date().toISOString().split('T')[0]}.xlsx`;
+    
+    // Download
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    FileSaver.saveAs(blob, filename);
+    
+    Swal.fire({
+      icon: 'success',
+      title: 'Report Generated!',
+      text: `Order management report with ${ordersToExport.length} orders.`,
+      timer: 3000,
+      showConfirmButton: false
+    });
+  }
+
+  exportOrderManagementReportLegacy(): void {
     // Use filtered orders based on current search term and status filter
     const ordersToExport = this.filteredOrders;
     
@@ -813,33 +1258,105 @@ private fetchYourProductsAndOrders(userEmail: string) {
       day: 'numeric' 
     });
     
+    // Calculate useful metrics
+    const totalRevenue = ordersToExport
+      .filter(o => o.status === 'approved' || o.status === 'ready-for-pickup' || o.status === 'completed')
+      .reduce((sum, order) => sum + this.getProductPrice(order.product), 0);
+    
+    const pendingCount = ordersToExport.filter(o => o.status === 'pending').length;
+    const approvedCount = ordersToExport.filter(o => o.status === 'approved').length;
+    const declinedCount = ordersToExport.filter(o => o.status === 'declined').length;
+    const readyPickupCount = ordersToExport.filter(o => o.status === 'ready-for-pickup').length;
+    const completedCount = ordersToExport.filter(o => o.status === 'completed').length;
+    const withRemarksCount = ordersToExport.filter(o => o.completion_remarks && o.completion_remarks.trim() !== '').length;
+    const withORCount = ordersToExport.filter(o => o.or_number && o.or_number.trim() !== '').length;
+    
+    // Calculate success rate
+    const totalProcessed = approvedCount + declinedCount + readyPickupCount + completedCount;
+    const successRate = totalProcessed > 0 ? (((approvedCount + readyPickupCount + completedCount) / totalProcessed) * 100).toFixed(1) : '0.0';
+    
+    // Top products
+    const productCounts: {[key: string]: number} = {};
+    ordersToExport.forEach(order => {
+      productCounts[order.product] = (productCounts[order.product] || 0) + 1;
+    });
+    const topProducts = Object.entries(productCounts)
+      .sort(([,a], [,b]) => b - a)
+      .slice(0, 5);
+    
     const summaryData = [
-      { 'ORDER MANAGEMENT REPORT': '', ' ': '', '  ': '', '   ': '' },
-      { 'ORDER MANAGEMENT REPORT': 'ORDER MANAGEMENT REPORT', ' ': '', '  ': '', '   ': '' },
-      { 'ORDER MANAGEMENT REPORT': '', ' ': '', '  ': '', '   ': '' },
-      { 'ORDER MANAGEMENT REPORT': 'Generated Date:', ' ': currentDate, '  ': '', '   ': '' },
-      { 'ORDER MANAGEMENT REPORT': 'Applied Filters:', ' ': '', '  ': '', '   ': '' },
-      { 'ORDER MANAGEMENT REPORT': '  - Status Filter:', ' ': this.statusFilter === 'all' ? 'All Statuses' : this.statusFilter.toUpperCase(), '  ': '', '   ': '' },
-      { 'ORDER MANAGEMENT REPORT': '  - Search Term:', ' ': this.searchTerm || 'None', '  ': '', '   ': '' },
-      { 'ORDER MANAGEMENT REPORT': '  - Sort Field:', ' ': this.sortField, '  ': '', '   ': '' },
-      { 'ORDER MANAGEMENT REPORT': '  - Sort Direction:', ' ': this.sortDirection.toUpperCase(), '  ': '', '   ': '' },
-      { 'ORDER MANAGEMENT REPORT': '', ' ': '', '  ': '', '   ': '' },
-      { 'ORDER MANAGEMENT REPORT': 'SUMMARY STATISTICS', ' ': '', '  ': '', '   ': '' },
-      { 'ORDER MANAGEMENT REPORT': 'Total Orders (Filtered):', ' ': ordersToExport.length.toString(), '  ': '', '   ': '' },
-      { 'ORDER MANAGEMENT REPORT': 'Total Orders (All):', ' ': this.customerOrders.length.toString(), '  ': '', '   ': '' },
-      { 'ORDER MANAGEMENT REPORT': '', ' ': '', '  ': '', '   ': '' },
-      { 'ORDER MANAGEMENT REPORT': 'STATUS BREAKDOWN (Filtered Results)', ' ': '', '  ': '', '   ': '' },
-      { 'ORDER MANAGEMENT REPORT': 'Pending Orders:', ' ': ordersToExport.filter(o => o.status === 'pending').length.toString(), '  ': '', '   ': '' },
-      { 'ORDER MANAGEMENT REPORT': 'Approved Orders:', ' ': ordersToExport.filter(o => o.status === 'approved').length.toString(), '  ': '', '   ': '' },
-      { 'ORDER MANAGEMENT REPORT': 'Declined Orders:', ' ': ordersToExport.filter(o => o.status === 'declined').length.toString(), '  ': '', '   ': '' },
-      { 'ORDER MANAGEMENT REPORT': 'Ready for Pickup:', ' ': ordersToExport.filter(o => o.status === 'ready-for-pickup').length.toString(), '  ': '', '   ': '' },
-      { 'ORDER MANAGEMENT REPORT': 'Completed Orders:', ' ': ordersToExport.filter(o => o.status === 'completed').length.toString(), '  ': '', '   ': '' },
-      { 'ORDER MANAGEMENT REPORT': '', ' ': '', '  ': '', '   ': '' },
-      { 'ORDER MANAGEMENT REPORT': 'COMPLETION REMARKS STATISTICS', ' ': '', '  ': '', '   ': '' },
-      { 'ORDER MANAGEMENT REPORT': 'Orders with OR Numbers:', ' ': ordersToExport.filter(o => o.or_number && o.or_number.trim() !== '').length.toString(), '  ': '', '   ': '' },
-      { 'ORDER MANAGEMENT REPORT': 'Orders with Completion Remarks:', ' ': ordersToExport.filter(o => o.completion_remarks && o.completion_remarks.trim() !== '').length.toString(), '  ': '', '   ': '' },
-      { 'ORDER MANAGEMENT REPORT': 'Completed Orders with Remarks:', ' ': ordersToExport.filter(o => o.status === 'completed' && o.completion_remarks && o.completion_remarks.trim() !== '').length.toString(), '  ': '', '   ': '' },
-      { 'ORDER MANAGEMENT REPORT': '', ' ': '', '  ': '', '   ': '' }
+      { 'A': '', 'B': '', 'C': '', 'D': '' },
+      { 'A': '═══════════════════════════════════════════════════════════', 'B': '', 'C': '', 'D': '' },
+      { 'A': 'GPS HIT FIT SPORTS APPAREL', 'B': '', 'C': '', 'D': '' },
+      { 'A': 'Logo: https://i.ibb.co/MyHC2QgX/GPS-HIT-FIT-LOGO.png', 'B': '', 'C': '', 'D': '' },
+      { 'A': '═══════════════════════════════════════════════════════════', 'B': '', 'C': '', 'D': '' },
+      { 'A': '', 'B': '', 'C': '', 'D': '' },
+      { 'A': 'ORDER MANAGEMENT REPORT', 'B': '', 'C': '', 'D': '' },
+      { 'A': '═══════════════════════════════════════════════════════════', 'B': '', 'C': '', 'D': '' },
+      { 'A': '', 'B': '', 'C': '', 'D': '' },
+      { 'A': 'REPORT INFORMATION', 'B': '', 'C': '', 'D': '' },
+      { 'A': '─────────────────────────────────────────────────────────', 'B': '', 'C': '', 'D': '' },
+      { 'A': 'Generated Date:', 'B': currentDate, 'C': '', 'D': '' },
+      { 'A': 'Report Type:', 'B': 'Order Management Analysis', 'C': '', 'D': '' },
+      { 'A': '', 'B': '', 'C': '', 'D': '' },
+      { 'A': 'ACTIVE FILTERS', 'B': '', 'C': '', 'D': '' },
+      { 'A': '─────────────────────────────────────────────────────────', 'B': '', 'C': '', 'D': '' },
+      { 'A': 'Status Filter:', 'B': this.statusFilter === 'all' ? 'All Statuses' : this.statusFilter.toUpperCase(), 'C': '', 'D': '' },
+      { 'A': 'Size Filter:', 'B': this.sizeFilter === 'all' ? 'All Sizes' : this.sizeFilter, 'C': '', 'D': '' },
+      { 'A': 'Search Term:', 'B': this.searchTerm || 'None', 'C': '', 'D': '' },
+      { 'A': 'Sort By:', 'B': `${this.sortField} (${this.sortDirection.toUpperCase()})`, 'C': '', 'D': '' },
+      { 'A': '', 'B': '', 'C': '', 'D': '' },
+      { 'A': '', 'B': '', 'C': '', 'D': '' },
+      { 'A': '═══════════════════════════════════════════════════════════', 'B': '', 'C': '', 'D': '' },
+      { 'A': 'KEY METRICS', 'B': '', 'C': '', 'D': '' },
+      { 'A': '═══════════════════════════════════════════════════════════', 'B': '', 'C': '', 'D': '' },
+      { 'A': '', 'B': '', 'C': '', 'D': '' },
+      { 'A': 'Total Orders in Report:', 'B': ordersToExport.length.toString(), 'C': '', 'D': '' },
+      { 'A': 'Total Revenue (Approved/Ready/Completed):', 'B': `₱${totalRevenue.toFixed(2)}`, 'C': '', 'D': '' },
+      { 'A': 'Average Order Value:', 'B': totalProcessed > 0 ? `₱${(totalRevenue / totalProcessed).toFixed(2)}` : '₱0.00', 'C': '', 'D': '' },
+      { 'A': 'Order Success Rate:', 'B': `${successRate}%`, 'C': '', 'D': '' },
+      { 'A': '', 'B': '', 'C': '', 'D': '' },
+      { 'A': '', 'B': '', 'C': '', 'D': '' },
+      { 'A': '═══════════════════════════════════════════════════════════', 'B': '', 'C': '', 'D': '' },
+      { 'A': 'ORDER STATUS BREAKDOWN', 'B': '', 'C': '', 'D': '' },
+      { 'A': '═══════════════════════════════════════════════════════════', 'B': '', 'C': '', 'D': '' },
+      { 'A': '', 'B': '', 'C': '', 'D': '' },
+      { 'A': 'Status', 'B': 'Count', 'C': 'Percentage', 'D': 'Revenue' },
+      { 'A': '─────────────────────────────────────────────────────────', 'B': '', 'C': '', 'D': '' },
+      { 'A': '🟡 Pending', 'B': pendingCount.toString(), 'C': `${ordersToExport.length > 0 ? ((pendingCount / ordersToExport.length) * 100).toFixed(1) : '0.0'}%`, 'D': '₱0.00' },
+      { 'A': '🟢 Approved', 'B': approvedCount.toString(), 'C': `${ordersToExport.length > 0 ? ((approvedCount / ordersToExport.length) * 100).toFixed(1) : '0.0'}%`, 'D': `₱${ordersToExport.filter(o => o.status === 'approved').reduce((sum, o) => sum + this.getProductPrice(o.product), 0).toFixed(2)}` },
+      { 'A': '🔴 Declined', 'B': declinedCount.toString(), 'C': `${ordersToExport.length > 0 ? ((declinedCount / ordersToExport.length) * 100).toFixed(1) : '0.0'}%`, 'D': '₱0.00' },
+      { 'A': '🔵 Ready for Pickup', 'B': readyPickupCount.toString(), 'C': `${ordersToExport.length > 0 ? ((readyPickupCount / ordersToExport.length) * 100).toFixed(1) : '0.0'}%`, 'D': `₱${ordersToExport.filter(o => o.status === 'ready-for-pickup').reduce((sum, o) => sum + this.getProductPrice(o.product), 0).toFixed(2)}` },
+      { 'A': '✅ Completed', 'B': completedCount.toString(), 'C': `${ordersToExport.length > 0 ? ((completedCount / ordersToExport.length) * 100).toFixed(1) : '0.0'}%`, 'D': `₱${ordersToExport.filter(o => o.status === 'completed').reduce((sum, o) => sum + this.getProductPrice(o.product), 0).toFixed(2)}` },
+      { 'A': '─────────────────────────────────────────────────────────', 'B': '', 'C': '', 'D': '' },
+      { 'A': 'TOTAL', 'B': ordersToExport.length.toString(), 'C': '100.0%', 'D': `₱${totalRevenue.toFixed(2)}` },
+      { 'A': '', 'B': '', 'C': '', 'D': '' },
+      { 'A': '', 'B': '', 'C': '', 'D': '' },
+      { 'A': '═══════════════════════════════════════════════════════════', 'B': '', 'C': '', 'D': '' },
+      { 'A': 'TOP 5 PRODUCTS', 'B': '', 'C': '', 'D': '' },
+      { 'A': '═══════════════════════════════════════════════════════════', 'B': '', 'C': '', 'D': '' },
+      { 'A': '', 'B': '', 'C': '', 'D': '' },
+      { 'A': 'Rank', 'B': 'Product Name', 'C': 'Orders', 'D': 'Percentage' },
+      { 'A': '─────────────────────────────────────────────────────────', 'B': '', 'C': '', 'D': '' },
+      ...topProducts.map(([product, count], index) => ({
+        'A': `#${index + 1}`,
+        'B': product,
+        'C': count.toString(),
+        'D': `${ordersToExport.length > 0 ? ((count / ordersToExport.length) * 100).toFixed(1) : '0.0'}%`
+      })),
+      { 'A': '', 'B': '', 'C': '', 'D': '' },
+      { 'A': '', 'B': '', 'C': '', 'D': '' },
+      { 'A': '═══════════════════════════════════════════════════════════', 'B': '', 'C': '', 'D': '' },
+      { 'A': 'ADDITIONAL INSIGHTS', 'B': '', 'C': '', 'D': '' },
+      { 'A': '═══════════════════════════════════════════════════════════', 'B': '', 'C': '', 'D': '' },
+      { 'A': '', 'B': '', 'C': '', 'D': '' },
+      { 'A': '📝 Orders with OR Numbers:', 'B': withORCount.toString(), 'C': `${ordersToExport.length > 0 ? ((withORCount / ordersToExport.length) * 100).toFixed(1) : '0.0'}%`, 'D': '' },
+      { 'A': '💬 Orders with Completion Remarks:', 'B': withRemarksCount.toString(), 'C': `${ordersToExport.length > 0 ? ((withRemarksCount / ordersToExport.length) * 100).toFixed(1) : '0.0'}%`, 'D': '' },
+      { 'A': '✅ Completed Orders with Remarks:', 'B': ordersToExport.filter(o => o.status === 'completed' && o.completion_remarks && o.completion_remarks.trim() !== '').length.toString(), 'C': `${completedCount > 0 ? ((ordersToExport.filter(o => o.status === 'completed' && o.completion_remarks && o.completion_remarks.trim() !== '').length / completedCount) * 100).toFixed(1) : '0.0'}%`, 'D': '' },
+      { 'A': '', 'B': '', 'C': '', 'D': '' },
+      { 'A': '⚠️ Action Required:', 'B': pendingCount > 0 ? `${pendingCount} orders need review` : 'No pending orders', 'C': '', 'D': '' },
+      { 'A': '📦 Ready to Ship:', 'B': readyPickupCount > 0 ? `${readyPickupCount} orders ready for pickup` : 'No orders ready', 'C': '', 'D': '' },
+      { 'A': '', 'B': '', 'C': '', 'D': '' }
     ];
     
     const summarySheet = XLSX.utils.json_to_sheet(summaryData);
@@ -847,6 +1364,9 @@ private fetchYourProductsAndOrders(userEmail: string) {
 
     // Sheet 2: Detailed Order List
     const detailedOrdersData = [
+      { 'DETAILED ORDERS': '', ' ': '', '  ': '', '   ': '', '    ': '', '     ': '', '      ': '', '       ': '', '        ': '', '         ': '', '          ': '' },
+      { 'DETAILED ORDERS': 'GPS HIT FIT SPORTS APPAREL', ' ': '', '  ': '', '   ': '', '    ': '', '     ': '', '      ': '', '       ': '', '        ': '', '         ': '', '          ': '' },
+      { 'DETAILED ORDERS': 'Logo: https://i.ibb.co/MyHC2QgX/GPS-HIT-FIT-LOGO.png', ' ': '', '  ': '', '   ': '', '    ': '', '     ': '', '      ': '', '       ': '', '        ': '', '         ': '', '          ': '' },
       { 'DETAILED ORDERS': '', ' ': '', '  ': '', '   ': '', '    ': '', '     ': '', '      ': '', '       ': '', '        ': '', '         ': '', '          ': '' },
       { 'DETAILED ORDERS': 'Order #', ' ': 'Customer Name', '  ': 'Customer Email', '   ': 'Cellphone', '    ': 'Product', '     ': 'Size', '      ': 'Status', '       ': 'Order Date', '        ': 'Pickup Date', '         ': 'OR Number', '          ': 'Completion Remarks' },
       ...ordersToExport.map(order => ({
@@ -867,103 +1387,15 @@ private fetchYourProductsAndOrders(userEmail: string) {
     const ordersSheet = XLSX.utils.json_to_sheet(detailedOrdersData);
     XLSX.utils.book_append_sheet(workbook, ordersSheet, 'Detailed Orders');
 
-    // Sheet 3: Status-wise Analysis
-    const statusAnalysisData = [
-      { 'STATUS ANALYSIS': '', ' ': '', '  ': '', '   ': '', '    ': '' },
-      { 'STATUS ANALYSIS': 'STATUS-WISE ANALYSIS', ' ': '', '  ': '', '   ': '', '    ': '' },
-      { 'STATUS ANALYSIS': '', ' ': '', '  ': '', '   ': '', '    ': '' },
-      { 'STATUS ANALYSIS': 'Status', ' ': 'Count', '  ': 'Percentage', '   ': 'Revenue (Est.)', '    ': 'Products' },
-    ];
-
-    const statusGroups = ['pending', 'approved', 'declined', 'ready-for-pickup', 'completed'];
-    const totalFiltered = ordersToExport.length;
-
-    statusGroups.forEach(status => {
-      const statusOrders = ordersToExport.filter(o => o.status === status);
-      const count = statusOrders.length;
-      const percentage = totalFiltered > 0 ? ((count / totalFiltered) * 100).toFixed(1) : '0.0';
-      const revenue = statusOrders.reduce((sum, order) => sum + this.getProductPrice(order.product), 0);
-      const uniqueProducts = [...new Set(statusOrders.map(o => o.product))].length;
-
-      statusAnalysisData.push({
-        'STATUS ANALYSIS': status.toUpperCase(),
-        ' ': count.toString(),
-        '  ': `${percentage}%`,
-        '   ': `₱${revenue.toFixed(2)}`,
-        '    ': uniqueProducts.toString()
-      });
-    });
-
-    const statusSheet = XLSX.utils.json_to_sheet(statusAnalysisData);
-    XLSX.utils.book_append_sheet(workbook, statusSheet, 'Status Analysis');
-
-    // Sheet 4: Product Performance (based on filtered orders)
-    const productPerformanceMap: {[product: string]: {
-      total: number,
-      pending: number,
-      approved: number,
-      declined: number,
-      readyPickup: number,
-      completed: number,
-      revenue: number
-    }} = {};
-
-    ordersToExport.forEach(order => {
-      if (!productPerformanceMap[order.product]) {
-        productPerformanceMap[order.product] = {
-          total: 0,
-          pending: 0,
-          approved: 0,
-          declined: 0,
-          readyPickup: 0,
-          completed: 0,
-          revenue: 0
-        };
-      }
-      
-      const productData = productPerformanceMap[order.product];
-      productData.total++;
-      productData.revenue += this.getProductPrice(order.product);
-      
-      switch (order.status) {
-        case 'pending': productData.pending++; break;
-        case 'approved': productData.approved++; break;
-        case 'declined': productData.declined++; break;
-        case 'ready-for-pickup': productData.readyPickup++; break;
-        case 'completed': productData.completed++; break;
-      }
-    });
-
-    const productPerformanceData = [
-      { 'PRODUCT PERFORMANCE': '', ' ': '', '  ': '', '   ': '', '    ': '', '     ': '', '      ': '', '       ': '', '        ': '' },
-      { 'PRODUCT PERFORMANCE': 'Product', ' ': 'Total Orders', '  ': 'Pending', '   ': 'Approved', '    ': 'Declined', '     ': 'Ready Pickup', '      ': 'Completed', '       ': 'Revenue', '        ': 'Success Rate' },
-      ...Object.entries(productPerformanceMap)
-        .sort(([,a], [,b]) => b.total - a.total)
-        .map(([product, data]) => {
-          const successRate = data.total > 0 ? (((data.approved + data.readyPickup + data.completed) / data.total) * 100).toFixed(1) : '0.0';
-          return {
-            'PRODUCT PERFORMANCE': product,
-            ' ': data.total.toString(),
-            '  ': data.pending.toString(),
-            '   ': data.approved.toString(),
-            '    ': data.declined.toString(),
-            '     ': data.readyPickup.toString(),
-            '      ': data.completed.toString(),
-            '       ': `₱${data.revenue.toFixed(2)}`,
-            '        ': `${successRate}%`
-          };
-        })
-    ];
-
-    const productSheet = XLSX.utils.json_to_sheet(productPerformanceData);
-    XLSX.utils.book_append_sheet(workbook, productSheet, 'Product Performance');
-
-    // Sheet 5: Completion Remarks (for completed orders with remarks)
+    // Sheet 3: Completion Remarks (for completed orders with remarks)
     const completedOrdersWithRemarks = ordersToExport.filter(order => 
       order.status === 'completed' && order.completion_remarks && order.completion_remarks.trim() !== ''
     );
     
     const completionRemarksData = [
+      { 'COMPLETION REMARKS': '', ' ': '', '  ': '', '   ': '', '    ': '', '     ': '' },
+      { 'COMPLETION REMARKS': 'GPS HIT FIT SPORTS APPAREL', ' ': '', '  ': '', '   ': '', '    ': '', '     ': '' },
+      { 'COMPLETION REMARKS': 'Logo: https://i.ibb.co/MyHC2QgX/GPS-HIT-FIT-LOGO.png', ' ': '', '  ': '', '   ': '', '    ': '', '     ': '' },
       { 'COMPLETION REMARKS': '', ' ': '', '  ': '', '   ': '', '    ': '', '     ': '' },
       { 'COMPLETION REMARKS': 'COMPLETION REMARKS REPORT', ' ': '', '  ': '', '   ': '', '    ': '', '     ': '' },
       { 'COMPLETION REMARKS': '', ' ': '', '  ': '', '   ': '', '    ': '', '     ': '' },
@@ -997,7 +1429,7 @@ private fetchYourProductsAndOrders(userEmail: string) {
     XLSX.utils.book_append_sheet(workbook, remarksSheet, 'Completion Remarks');
 
     // Apply formatting to all sheets
-    [summarySheet, ordersSheet, statusSheet, productSheet, remarksSheet].forEach(sheet => {
+    [summarySheet, ordersSheet, remarksSheet].forEach(sheet => {
       this.formatExcelSheet(sheet);
     });
 
@@ -1005,6 +1437,9 @@ private fetchYourProductsAndOrders(userEmail: string) {
     let filename = 'Order_Management_Report';
     if (this.statusFilter !== 'all') {
       filename += `_${this.statusFilter.toUpperCase()}`;
+    }
+    if (this.sizeFilter !== 'all') {
+      filename += `_Size_${this.sizeFilter.replace(/[^a-zA-Z0-9]/g, '_')}`;
     }
     if (this.searchTerm) {
       filename += `_Search_${this.searchTerm.replace(/[^a-zA-Z0-9]/g, '_')}`;
@@ -1024,7 +1459,7 @@ private fetchYourProductsAndOrders(userEmail: string) {
     Swal.fire({
       icon: 'success',
       title: 'Report Generated!',
-      text: `Order management report generated successfully with ${ordersToExport.length} orders across 5 sheets. ${completedWithRemarks} completed orders include completion remarks.`,
+      text: `Order management report generated successfully with ${ordersToExport.length} orders across 3 sheets. ${completedWithRemarks} completed orders include completion remarks.`,
       timer: 4000,
       showConfirmButton: false
     });
@@ -1036,7 +1471,8 @@ private fetchYourProductsAndOrders(userEmail: string) {
     if (!userEmail) return;
 
     this.http.get<any>(
-      `http://localhost:3001/api/products?seller=${encodeURIComponent(userEmail)}`,
+      `${this.apiUrl}products?seller=${encodeURIComponent(userEmail)}`,
+
       { 
         withCredentials: true,
         headers: this.getHeaders()
@@ -2038,7 +2474,118 @@ private fetchYourProductsAndOrders(userEmail: string) {
 
   // Export professional report with charts
   exportProfessionalReport() {
-    this.exportSalesReportData();
+    this.exportSalesReportWithLogo();
+  }
+
+  // Export sales report with embedded logo using ExcelJS
+  async exportSalesReportWithLogo(): Promise<void> {
+    const completedOrders = this.getCompletedOrders();
+    let filteredOrders = completedOrders;
+    
+    if (this.reportStartDate && this.reportEndDate) {
+      const startDate = new Date(this.reportStartDate);
+      const endDate = new Date(this.reportEndDate);
+      endDate.setHours(23, 59, 59, 999);
+      
+      filteredOrders = completedOrders.filter(order => {
+        if (!order.created_at) return false;
+        const orderDate = new Date(order.created_at);
+        return orderDate >= startDate && orderDate <= endDate;
+      });
+    }
+
+    const totalRevenue = filteredOrders.reduce((sum, order) => sum + this.getProductPrice(order.product), 0);
+    const avgOrderValue = filteredOrders.length > 0 ? totalRevenue / filteredOrders.length : 0;
+    const dateRangeText = this.reportStartDate && this.reportEndDate ? 
+      `${new Date(this.reportStartDate).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'})} - ${new Date(this.reportEndDate).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'})}` : 
+      'All Time';
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Sales Report');
+    
+    // Add logo and header
+    const startRow = await this.addLogoHeader(worksheet, 'SALES REPORT');
+    
+    // Add report period
+    let currentRow = startRow;
+    worksheet.mergeCells(currentRow, 1, currentRow, 4);
+    const periodCell = worksheet.getCell(currentRow, 1);
+    periodCell.value = `Report Period: ${dateRangeText}`;
+    periodCell.font = { bold: true, size: 12 };
+    periodCell.alignment = { horizontal: 'center' };
+    currentRow += 2;
+    
+    // Financial Summary
+    worksheet.mergeCells(currentRow, 1, currentRow, 4);
+    const summaryTitle = worksheet.getCell(currentRow, 1);
+    summaryTitle.value = 'FINANCIAL SUMMARY';
+    summaryTitle.font = { bold: true, size: 14 };
+    summaryTitle.alignment = { horizontal: 'center' };
+    summaryTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFCCCCCC' } };
+    currentRow++;
+    
+    worksheet.addRow(['Total Revenue:', `₱${totalRevenue.toFixed(2)}`]);
+    worksheet.addRow(['Total Orders:', filteredOrders.length]);
+    worksheet.addRow(['Average Order Value:', `₱${avgOrderValue.toFixed(2)}`]);
+    worksheet.addRow([]);
+    currentRow += 4;
+    
+    // Sales Transactions
+    worksheet.mergeCells(currentRow, 1, currentRow, 7);
+    const transTitle = worksheet.getCell(currentRow, 1);
+    transTitle.value = 'SALES TRANSACTIONS';
+    transTitle.font = { bold: true, size: 14 };
+    transTitle.alignment = { horizontal: 'center' };
+    transTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFCCCCCC' } };
+    currentRow++;
+    
+    const headerRow = worksheet.addRow(['Order #', 'Date', 'Product', 'Size', 'Price', 'OR Number', 'Customer']);
+    headerRow.font = { bold: true, size: 11 };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+    headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
+    
+    filteredOrders
+      .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+      .forEach(order => {
+        worksheet.addRow([
+          `#${order.id}`,
+          new Date(order.created_at || '').toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'}),
+          order.product,
+          order.size || 'N/A',
+          `₱${this.getProductPrice(order.product).toFixed(2)}`,
+          order.or_number || 'No OR',
+          order.customer_name || order.customer || 'N/A'
+        ]);
+      });
+    
+    // Auto-fit and align all columns
+    this.autoFitColumns(worksheet);
+    
+    const filenameDateText = this.reportStartDate && this.reportEndDate ? 
+      `${this.reportStartDate}_to_${this.reportEndDate}` : 
+      'All_Time';
+    
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    FileSaver.saveAs(blob, `Sales_Report_${filenameDateText}_${new Date().toISOString().split('T')[0]}.xlsx`);
+
+    Swal.fire({
+      icon: 'success',
+      title: 'Sales Report Generated!',
+      html: `
+        <div style="text-align: left; padding: 10px;">
+          <p><strong>Report Details:</strong></p>
+          <ul style="margin: 10px 0;">
+            <li>Period: ${dateRangeText}</li>
+            <li>Total Revenue: ₱${totalRevenue.toFixed(2)}</li>
+            <li>Orders: ${filteredOrders.length}</li>
+          </ul>
+        </div>
+      `,
+      timer: 5000,
+      showConfirmButton: true,
+      confirmButtonColor: '#780001'
+    });
   }
 
   // Export sales report data - matches what's displayed in the sales report view
@@ -2060,160 +2607,437 @@ private fetchYourProductsAndOrders(userEmail: string) {
       });
     }
 
+    // Calculate metrics
+    const totalRevenue = filteredOrders.reduce((sum, order) => sum + this.getProductPrice(order.product), 0);
+    const avgOrderValue = filteredOrders.length > 0 ? totalRevenue / filteredOrders.length : 0;
+    const ordersWithOR = filteredOrders.filter(o => o.or_number).length;
+    const dateRangeText = this.reportStartDate && this.reportEndDate ? 
+      `${new Date(this.reportStartDate).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'})} - ${new Date(this.reportEndDate).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'})}` : 
+      'All Time';
+
     // Create workbook with sales report data
     const workbook: XLSX.WorkBook = XLSX.utils.book_new();
     
-    // Sheet 1: Sales Report Summary
+    // Sheet 1: Executive Summary
     const reportSummaryData = [
-      { 'SALES REPORT': '', ' ': '', '  ': '', '   ': '' },
-      { 'SALES REPORT': 'SALES REPORT SUMMARY', ' ': '', '  ': '', '   ': '' },
-      { 'SALES REPORT': '', ' ': '', '  ': '', '   ': '' },
-      { 'SALES REPORT': 'Generated Date:', ' ': this.report.generatedDate, '  ': '', '   ': '' },
-      { 'SALES REPORT': 'Report Period:', ' ': this.report.reportPeriod, '  ': '', '   ': '' },
-      { 'SALES REPORT': 'Date Range:', ' ': this.reportStartDate && this.reportEndDate ? `${this.reportStartDate} to ${this.reportEndDate}` : 'All Time', '  ': '', '   ': '' },
-      { 'SALES REPORT': '', ' ': '', '  ': '', '   ': '' },
-      { 'SALES REPORT': 'EXECUTIVE SUMMARY', ' ': '', '  ': '', '   ': '' },
-      { 'SALES REPORT': 'Total Revenue:', ' ': `₱${this.report.executiveSummary.totalRevenue.toLocaleString()}`, '  ': '', '   ': '' },
-      { 'SALES REPORT': 'Total Completed Orders:', ' ': filteredOrders.length.toString(), '  ': '', '   ': '' },
-      { 'SALES REPORT': 'All Orders (Total):', ' ': this.report.executiveSummary.totalOrders.toString(), '  ': '', '   ': '' },
-      { 'SALES REPORT': 'Average Order Value:', ' ': `₱${filteredOrders.length > 0 ? (filteredOrders.reduce((sum, order) => sum + this.getProductPrice(order.product), 0) / filteredOrders.length).toFixed(2) : '0.00'}`, '  ': '', '   ': '' },
-      { 'SALES REPORT': '', ' ': '', '  ': '', '   ': '' }
+      { 'A': '', 'B': '', 'C': '', 'D': '' },
+      { 'A': '═══════════════════════════════════════════════════════════', 'B': '', 'C': '', 'D': '' },
+      { 'A': 'GPS HIT FIT SPORTS APPAREL', 'B': '', 'C': '', 'D': '' },
+      { 'A': 'Logo: https://i.ibb.co/MyHC2QgX/GPS-HIT-FIT-LOGO.png', 'B': '', 'C': '', 'D': '' },
+      { 'A': '═══════════════════════════════════════════════════════════', 'B': '', 'C': '', 'D': '' },
+      { 'A': '', 'B': '', 'C': '', 'D': '' },
+      { 'A': 'SALES REPORT', 'B': '', 'C': '', 'D': '' },
+      { 'A': '═══════════════════════════════════════════════════════════', 'B': '', 'C': '', 'D': '' },
+      { 'A': '', 'B': '', 'C': '', 'D': '' },
+      { 'A': 'REPORT INFORMATION', 'B': '', 'C': '', 'D': '' },
+      { 'A': '─────────────────────────────────────────────────────────', 'B': '', 'C': '', 'D': '' },
+      { 'A': 'Generated:', 'B': new Date().toLocaleDateString('en-US', {month: 'long', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'}), 'C': '', 'D': '' },
+      { 'A': 'Report Period:', 'B': dateRangeText, 'C': '', 'D': '' },
+      { 'A': 'Report Type:', 'B': 'Completed Sales Analysis', 'C': '', 'D': '' },
+      { 'A': '', 'B': '', 'C': '', 'D': '' },
+      { 'A': '', 'B': '', 'C': '', 'D': '' },
+      { 'A': '═══════════════════════════════════════════════════════════', 'B': '', 'C': '', 'D': '' },
+      { 'A': 'FINANCIAL SUMMARY', 'B': '', 'C': '', 'D': '' },
+      { 'A': '═══════════════════════════════════════════════════════════', 'B': '', 'C': '', 'D': '' },
+      { 'A': '', 'B': '', 'C': '', 'D': '' },
+      { 'A': 'Metric', 'B': 'Value', 'C': 'Details', 'D': '' },
+      { 'A': '─────────────────────────────────────────────────────────', 'B': '', 'C': '', 'D': '' },
+      { 'A': '💰 Total Revenue', 'B': `₱${totalRevenue.toFixed(2)}`, 'C': 'From completed orders', 'D': '' },
+      { 'A': '📦 Total Orders', 'B': filteredOrders.length.toString(), 'C': 'Successfully completed', 'D': '' },
+      { 'A': '📊 Average Order Value', 'B': `₱${avgOrderValue.toFixed(2)}`, 'C': 'Revenue per order', 'D': '' },
+      { 'A': '📝 Orders with OR', 'B': ordersWithOR.toString(), 'C': `${filteredOrders.length > 0 ? ((ordersWithOR/filteredOrders.length)*100).toFixed(1) : '0'}% of total`, 'D': '' },
+      { 'A': '📄 Unique OR Numbers', 'B': [...new Set(filteredOrders.filter(o => o.or_number).map(o => o.or_number))].length.toString(), 'C': 'Official receipts issued', 'D': '' },
+      { 'A': '', 'B': '', 'C': '', 'D': '' },
+      { 'A': '', 'B': '', 'C': '', 'D': '' },
+      { 'A': '═══════════════════════════════════════════════════════════', 'B': '', 'C': '', 'D': '' },
+      { 'A': 'TOP SELLING PRODUCTS', 'B': '', 'C': '', 'D': '' },
+      { 'A': '═══════════════════════════════════════════════════════════', 'B': '', 'C': '', 'D': '' },
+      { 'A': '', 'B': '', 'C': '', 'D': '' },
     ];
-    
-    const summarySheet = XLSX.utils.json_to_sheet(reportSummaryData);
-    XLSX.utils.book_append_sheet(workbook, summarySheet, 'Report Summary');
 
-    // Sheet 2: Completed Orders (Main Data) - Each size as separate row
-    const completedOrdersData = [
-      { 'COMPLETED ORDERS': '', ' ': '', '  ': '', '   ': '', '    ': '', '     ': '' },
-      { 'COMPLETED ORDERS': 'Order #', ' ': 'Product Name', '  ': 'Size', '   ': 'Price', '    ': 'OR Number', '     ': 'Date Completed' },
-      ...filteredOrders.map(order => ({
-        'COMPLETED ORDERS': `#${order.id}`,
-        ' ': order.product,
-        '  ': order.size || 'N/A',
-        '   ': `₱${this.getProductPrice(order.product).toFixed(2)}`,
-        '    ': order.or_number || 'N/A',
-        '     ': this.getOrderDate(order)
-      })),
-      { 'COMPLETED ORDERS': '', ' ': '', '  ': '', '   ': '', '    ': '', '     ': '' },
-      { 'COMPLETED ORDERS': 'TOTALS', ' ': '', '  ': '', '   ': '', '    ': '', '     ': '' },
-      { 'COMPLETED ORDERS': 'Total Orders:', ' ': filteredOrders.length.toString(), '  ': '', '   ': '', '    ': '', '     ': '' },
-      { 'COMPLETED ORDERS': 'Total Revenue:', ' ': `₱${filteredOrders.reduce((sum, order) => sum + this.getProductPrice(order.product), 0).toFixed(2)}`, '  ': '', '   ': '', '    ': '', '     ': '' },
-      { 'COMPLETED ORDERS': 'Date Range:', ' ': this.reportStartDate && this.reportEndDate ? `${this.reportStartDate} to ${this.reportEndDate}` : 'All Time', '  ': '', '   ': '', '    ': '', '     ': '' }
-    ];
-    
-    const ordersSheet = XLSX.utils.json_to_sheet(completedOrdersData);
-    XLSX.utils.book_append_sheet(workbook, ordersSheet, 'Completed Orders');
-
-    // Sheet 3: Product-Size Summary (Each size as separate entry)
-    const productSizeSummary: {[key: string]: {count: number, revenue: number, orNumbers: string[]}} = {};
-    
+    // Add top products
+    const productRevenue: {[key: string]: {count: number, revenue: number}} = {};
     filteredOrders.forEach(order => {
-      const productSizeKey = `${order.product} - ${order.size || 'No Size'}`;
-      if (!productSizeSummary[productSizeKey]) {
-        productSizeSummary[productSizeKey] = {count: 0, revenue: 0, orNumbers: []};
+      if (!productRevenue[order.product]) {
+        productRevenue[order.product] = {count: 0, revenue: 0};
       }
-      productSizeSummary[productSizeKey].count++;
-      productSizeSummary[productSizeKey].revenue += this.getProductPrice(order.product);
-      if (order.or_number && !productSizeSummary[productSizeKey].orNumbers.includes(order.or_number)) {
-        productSizeSummary[productSizeKey].orNumbers.push(order.or_number);
-      }
+      productRevenue[order.product].count++;
+      productRevenue[order.product].revenue += this.getProductPrice(order.product);
     });
 
-    const productSummaryData = [
-      { 'PRODUCT-SIZE SUMMARY': '', ' ': '', '  ': '', '   ': '', '    ': '', '     ': '' },
-      { 'PRODUCT-SIZE SUMMARY': 'Product - Size', ' ': 'Orders Count', '  ': 'Total Revenue', '   ': 'Avg Price', '    ': 'OR Numbers', '     ': 'Revenue %' },
-      ...Object.entries(productSizeSummary)
-        .sort(([,a], [,b]) => b.revenue - a.revenue)
-        .map(([productSize, data]) => {
-          const totalRevenue = filteredOrders.reduce((sum, order) => sum + this.getProductPrice(order.product), 0);
-          const revenuePercentage = totalRevenue > 0 ? ((data.revenue / totalRevenue) * 100).toFixed(1) : '0.0';
-          return {
-            'PRODUCT-SIZE SUMMARY': productSize,
-            ' ': data.count.toString(),
-            '  ': `₱${data.revenue.toFixed(2)}`,
-            '   ': `₱${(data.revenue / data.count).toFixed(2)}`,
-            '    ': data.orNumbers.join(', ') || 'N/A',
-            '     ': `${revenuePercentage}%`
-          };
-        }),
-      { 'PRODUCT-SIZE SUMMARY': '', ' ': '', '  ': '', '   ': '', '    ': '', '     ': '' },
-      { 'PRODUCT-SIZE SUMMARY': 'SUMMARY', ' ': '', '  ': '', '   ': '', '    ': '', '     ': '' },
-      { 'PRODUCT-SIZE SUMMARY': 'Total Product-Size Combinations:', ' ': Object.keys(productSizeSummary).length.toString(), '  ': '', '   ': '', '    ': '', '     ': '' },
-      { 'PRODUCT-SIZE SUMMARY': 'Best Selling Combination:', ' ': Object.entries(productSizeSummary).sort(([,a], [,b]) => b.count - a.count)[0]?.[0] || 'N/A', '  ': '', '   ': '', '    ': '', '     ': '' },
-      { 'PRODUCT-SIZE SUMMARY': 'Highest Revenue Combination:', ' ': Object.entries(productSizeSummary).sort(([,a], [,b]) => b.revenue - a.revenue)[0]?.[0] || 'N/A', '  ': '', '   ': '', '    ': '', '     ': '' },
-      { 'PRODUCT-SIZE SUMMARY': 'Total OR Numbers Issued:', ' ': [...new Set(filteredOrders.filter(o => o.or_number).map(o => o.or_number))].length.toString(), '  ': '', '   ': '', '    ': '', '     ': '' }
-    ];
-    
-    const productSheet = XLSX.utils.json_to_sheet(productSummaryData);
-    XLSX.utils.book_append_sheet(workbook, productSheet, 'Product-Size Summary');
+    const topProducts = Object.entries(productRevenue)
+      .sort(([,a], [,b]) => b.revenue - a.revenue)
+      .slice(0, 5);
 
-    // Sheet 4: OR Number Tracking
-    const orNumberData = [
-      { 'OR NUMBER TRACKING': '', ' ': '', '  ': '', '   ': '', '    ': '' },
-      { 'OR NUMBER TRACKING': 'OR Number', ' ': 'Order #', '  ': 'Product - Size', '   ': 'Amount', '    ': 'Date Completed' },
-      ...filteredOrders
-        .filter(order => order.or_number)
-        .sort((a, b) => (a.or_number || '').localeCompare(b.or_number || ''))
-        .map(order => ({
-          'OR NUMBER TRACKING': order.or_number,
-          ' ': `#${order.id}`,
-          '  ': `${order.product} - ${order.size || 'No Size'}`,
-          '   ': `₱${this.getProductPrice(order.product).toFixed(2)}`,
-          '    ': this.getOrderDate(order)
-        })),
-      { 'OR NUMBER TRACKING': '', ' ': '', '  ': '', '   ': '', '    ': '' },
-      { 'OR NUMBER TRACKING': 'OR SUMMARY', ' ': '', '  ': '', '   ': '', '    ': '' },
-      { 'OR NUMBER TRACKING': 'Total OR Numbers Issued:', ' ': [...new Set(filteredOrders.filter(o => o.or_number).map(o => o.or_number))].length.toString(), '  ': '', '   ': '', '    ': '' },
-      { 'OR NUMBER TRACKING': 'Orders with OR:', ' ': filteredOrders.filter(o => o.or_number).length.toString(), '  ': '', '   ': '', '    ': '' },
-      { 'OR NUMBER TRACKING': 'Orders without OR:', ' ': filteredOrders.filter(o => !o.or_number).length.toString(), '  ': '', '   ': '', '    ': '' },
-      { 'OR NUMBER TRACKING': 'Total Revenue with OR:', ' ': `₱${filteredOrders.filter(o => o.or_number).reduce((sum, order) => sum + this.getProductPrice(order.product), 0).toFixed(2)}`, '  ': '', '   ': '', '    ': '' }
+    reportSummaryData.push(
+      { 'A': 'Rank', 'B': 'Product', 'C': 'Sales', 'D': 'Revenue' },
+      { 'A': '─────────────────────────────────────────────────────────', 'B': '', 'C': '', 'D': '' }
+    );
+
+    topProducts.forEach(([product, data], index) => {
+      reportSummaryData.push({
+        'A': `#${index + 1}`,
+        'B': product,
+        'C': `${data.count} orders`,
+        'D': `₱${data.revenue.toFixed(2)}`
+      });
+    });
+
+    const summarySheet = XLSX.utils.json_to_sheet(reportSummaryData);
+    XLSX.utils.book_append_sheet(workbook, summarySheet, 'Executive Summary');
+
+    // Sheet 2: Size Distribution by Product
+    const sizeDistributionData = [
+      { 'A': '', 'B': '', 'C': '' },
+      { 'A': '═══════════════════════════════════════════════════════════════════════════════', 'B': '', 'C': '' },
+      { 'A': 'GPS HIT FIT SPORTS APPAREL', 'B': '', 'C': '' },
+      { 'A': 'Logo: https://i.ibb.co/MyHC2QgX/GPS-HIT-FIT-LOGO.png', 'B': '', 'C': '' },
+      { 'A': '═══════════════════════════════════════════════════════════════════════════════', 'B': '', 'C': '' },
+      { 'A': '', 'B': '', 'C': '' },
+      { 'A': 'SIZE DISTRIBUTION BY PRODUCT', 'B': '', 'C': '' },
+      { 'A': '═══════════════════════════════════════════════════════════════════════════════', 'B': '', 'C': '' },
+      { 'A': '', 'B': '', 'C': '' }
     ];
-    
-    const orNumberSheet = XLSX.utils.json_to_sheet(orNumberData);
-    XLSX.utils.book_append_sheet(workbook, orNumberSheet, 'OR Number Tracking');
+
+    // Group orders by product and size
+    const productSizeMap: {[product: string]: {[size: string]: {count: number, revenue: number}}} = {};
+    filteredOrders.forEach(order => {
+      const product = order.product;
+      const size = order.size || 'No Size';
+      
+      if (!productSizeMap[product]) {
+        productSizeMap[product] = {};
+      }
+      if (!productSizeMap[product][size]) {
+        productSizeMap[product][size] = {count: 0, revenue: 0};
+      }
+      productSizeMap[product][size].count++;
+      productSizeMap[product][size].revenue += this.getProductPrice(order.product);
+    });
+
+    // Add data for each product
+    Object.entries(productSizeMap)
+      .sort(([,a], [,b]) => {
+        const totalA = Object.values(a).reduce((sum, data) => sum + data.count, 0);
+        const totalB = Object.values(b).reduce((sum, data) => sum + data.count, 0);
+        return totalB - totalA;
+      })
+      .forEach(([product, sizes]) => {
+        const totalProductOrders = Object.values(sizes).reduce((sum, data) => sum + data.count, 0);
+        const totalProductRevenue = Object.values(sizes).reduce((sum, data) => sum + data.revenue, 0);
+
+        sizeDistributionData.push(
+          { 'A': `📦 ${product}`, 'B': '', 'C': '' },
+          { 'A': '─────────────────────────────────────────────────────────────────────────────', 'B': '', 'C': '' },
+          { 'A': 'Size', 'B': 'Quantity Sold', 'C': 'Revenue' }
+        );
+
+        // Sort sizes by count
+        Object.entries(sizes)
+          .sort(([,a], [,b]) => b.count - a.count)
+          .forEach(([size, data]) => {
+            sizeDistributionData.push({
+              'A': size,
+              'B': `${data.count} orders`,
+              'C': `₱${data.revenue.toFixed(2)}`
+            });
+          });
+
+        sizeDistributionData.push(
+          { 'A': 'Product Total:', 'B': `${totalProductOrders} orders`, 'C': `₱${totalProductRevenue.toFixed(2)}` },
+          { 'A': '', 'B': '', 'C': '' }
+        );
+      });
+
+    // Add overall size summary at the bottom
+    sizeDistributionData.push(
+      { 'A': '', 'B': '', 'C': '' },
+      { 'A': '═══════════════════════════════════════════════════════════════════════════════', 'B': '', 'C': '' },
+      { 'A': 'OVERALL SIZE SUMMARY', 'B': '', 'C': '' },
+      { 'A': '═══════════════════════════════════════════════════════════════════════════════', 'B': '', 'C': '' },
+      { 'A': '', 'B': '', 'C': '' },
+      { 'A': 'Size', 'B': 'Total Sold', 'C': 'Percentage' },
+      { 'A': '─────────────────────────────────────────────────────────────────────────────', 'B': '', 'C': '' }
+    );
+
+    // Calculate overall size totals
+    const overallSizeTotals: {[size: string]: number} = {};
+    filteredOrders.forEach(order => {
+      const size = order.size || 'No Size';
+      overallSizeTotals[size] = (overallSizeTotals[size] || 0) + 1;
+    });
+
+    Object.entries(overallSizeTotals)
+      .sort(([,a], [,b]) => b - a)
+      .forEach(([size, count]) => {
+        const percentage = ((count / filteredOrders.length) * 100).toFixed(1);
+        sizeDistributionData.push({
+          'A': size,
+          'B': `${count} orders`,
+          'C': `${percentage}%`
+        });
+      });
+
+    sizeDistributionData.push(
+      { 'A': '', 'B': '', 'C': '' },
+      { 'A': 'Total:', 'B': `${filteredOrders.length} orders`, 'C': '100%' }
+    );
+
+    const sizeDistributionSheet = XLSX.utils.json_to_sheet(sizeDistributionData);
+    XLSX.utils.book_append_sheet(workbook, sizeDistributionSheet, 'Size Distribution');
+
+    // Sheet 3: Sales Transactions
+    const transactionsData = [
+      { 'A': '', 'B': '', 'C': '', 'D': '', 'E': '', 'F': '', 'G': '' },
+      { 'A': '═══════════════════════════════════════════════════════════════════════════════', 'B': '', 'C': '', 'D': '', 'E': '', 'F': '', 'G': '' },
+      { 'A': 'GPS HIT FIT SPORTS APPAREL', 'B': '', 'C': '', 'D': '', 'E': '', 'F': '', 'G': '' },
+      { 'A': 'Logo: https://i.ibb.co/MyHC2QgX/GPS-HIT-FIT-LOGO.png', 'B': '', 'C': '', 'D': '', 'E': '', 'F': '', 'G': '' },
+      { 'A': '═══════════════════════════════════════════════════════════════════════════════', 'B': '', 'C': '', 'D': '', 'E': '', 'F': '', 'G': '' },
+      { 'A': '', 'B': '', 'C': '', 'D': '', 'E': '', 'F': '', 'G': '' },
+      { 'A': 'SALES TRANSACTIONS', 'B': '', 'C': '', 'D': '', 'E': '', 'F': '', 'G': '' },
+      { 'A': '═══════════════════════════════════════════════════════════════════════════════', 'B': '', 'C': '', 'D': '', 'E': '', 'F': '', 'G': '' },
+      { 'A': '', 'B': '', 'C': '', 'D': '', 'E': '', 'F': '', 'G': '' },
+      { 'A': 'Order #', 'B': 'Date', 'C': 'Product', 'D': 'Size', 'E': 'Price', 'F': 'OR Number', 'G': 'Customer' },
+      { 'A': '─────────────────────────────────────────────────────────────────────────────', 'B': '', 'C': '', 'D': '', 'E': '', 'F': '', 'G': '' },
+      ...filteredOrders
+        .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+        .map(order => ({
+          'A': `#${order.id}`,
+          'B': new Date(order.created_at || '').toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'}),
+          'C': order.product,
+          'D': order.size || 'N/A',
+          'E': `₱${this.getProductPrice(order.product).toFixed(2)}`,
+          'F': order.or_number || 'No OR',
+          'G': order.customer_name || order.customer || 'N/A'
+        })),
+      { 'A': '', 'B': '', 'C': '', 'D': '', 'E': '', 'F': '', 'G': '' },
+      { 'A': '═══════════════════════════════════════════════════════════════════════════════', 'B': '', 'C': '', 'D': '', 'E': '', 'F': '', 'G': '' },
+      { 'A': 'TOTALS', 'B': '', 'C': '', 'D': '', 'E': '', 'F': '', 'G': '' },
+      { 'A': '─────────────────────────────────────────────────────────────────────────────', 'B': '', 'C': '', 'D': '', 'E': '', 'F': '', 'G': '' },
+      { 'A': 'Total Transactions:', 'B': filteredOrders.length.toString(), 'C': '', 'D': '', 'E': '', 'F': '', 'G': '' },
+      { 'A': 'Total Revenue:', 'B': `₱${totalRevenue.toFixed(2)}`, 'C': '', 'D': '', 'E': '', 'F': '', 'G': '' },
+      { 'A': 'Period:', 'B': dateRangeText, 'C': '', 'D': '', 'E': '', 'F': '', 'G': '' }
+    ];
+
+    const transactionsSheet = XLSX.utils.json_to_sheet(transactionsData);
+    XLSX.utils.book_append_sheet(workbook, transactionsSheet, 'Sales Transactions');
 
     // Apply formatting to sheets
     this.formatExcelSheet(summarySheet);
-    this.formatExcelSheet(ordersSheet);
-    this.formatExcelSheet(productSheet);
-    this.formatExcelSheet(orNumberSheet);
+    this.formatExcelSheet(sizeDistributionSheet);
+    this.formatExcelSheet(transactionsSheet);
 
     // Generate and download the file
     const excelBuffer: any = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
     const data: Blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     
     // Create filename based on date range
-    const dateRangeText = this.reportStartDate && this.reportEndDate ? 
+    const filenameDateText = this.reportStartDate && this.reportEndDate ? 
       `${this.reportStartDate}_to_${this.reportEndDate}` : 
       'All_Time';
     
-    FileSaver.saveAs(data, `Sales_Report_${dateRangeText}_${new Date().toISOString().split('T')[0]}.xlsx`);
+    FileSaver.saveAs(data, `Sales_Report_${filenameDateText}_${new Date().toISOString().split('T')[0]}.xlsx`);
+
+    // Show success message
+    Swal.fire({
+      icon: 'success',
+      title: 'Sales Report Generated!',
+      html: `
+        <div style="text-align: left; padding: 10px;">
+          <p><strong>Report Details:</strong></p>
+          <ul style="margin: 10px 0;">
+            <li>Period: ${dateRangeText}</li>
+            <li>Total Revenue: ₱${totalRevenue.toFixed(2)}</li>
+            <li>Orders: ${filteredOrders.length}</li>
+            <li>Products: ${Object.keys(productRevenue).length}</li>
+            <li>Sheets: 3 (Summary, Size Distribution, Transactions)</li>
+          </ul>
+        </div>
+      `,
+      timer: 5000,
+      showConfirmButton: true,
+      confirmButtonColor: '#780001'
+    });
+  }
+
+  // Helper method to add logo and company header to ExcelJS worksheet
+  private async addLogoHeader(worksheet: ExcelJS.Worksheet, reportTitle: string, startRow: number = 1): Promise<number> {
+    try {
+      const response = await fetch('https://i.ibb.co/fGG71QSq/476456511-640897084960800-2564012019781491129-n.jpg');
+      const blob = await response.blob();
+      const arrayBuffer = await blob.arrayBuffer();
+      
+      const workbook = worksheet.workbook;
+      const imageId = workbook.addImage({
+        buffer: arrayBuffer,
+        extension: 'jpeg',
+      });
+      
+      // Add full-width header image (spanning all columns)
+      worksheet.addImage(imageId, {
+        tl: { col: 0, row: startRow - 1 } as any,
+        br: { col: 7, row: startRow + 4 } as any
+      });
+      
+      // Set row heights for header image area
+      for (let i = startRow; i < startRow + 5; i++) {
+        worksheet.getRow(i).height = 30;
+      }
+    } catch (error) {
+      console.error('Error loading header image:', error);
+    }
+    
+    // Add report title
+    const titleRow = startRow + 6;
+    const lastCol = worksheet.columnCount || 7;
+    worksheet.mergeCells(titleRow, 1, titleRow, lastCol);
+    const titleCell = worksheet.getCell(titleRow, 1);
+    titleCell.value = reportTitle;
+    titleCell.font = { name: 'Arial', size: 16, bold: true };
+    titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    titleCell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E0E0' }
+    };
+    worksheet.getRow(titleRow).height = 25;
+    
+    // Add generation date
+    const dateRow = titleRow + 1;
+    worksheet.mergeCells(dateRow, 1, dateRow, lastCol);
+    const dateCell = worksheet.getCell(dateRow, 1);
+    dateCell.value = `Generated: ${new Date().toLocaleString('en-US')}`;
+    dateCell.font = { name: 'Arial', size: 11 };
+    dateCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    
+    return dateRow + 2; // Return next available row after header
+  }
+  
+  // Helper method to auto-fit and align all columns in a worksheet
+  private autoFitColumns(worksheet: ExcelJS.Worksheet): void {
+    worksheet.columns.forEach((column, colIndex) => {
+      let maxLength = 10;
+      
+      // Calculate the maximum content length for this column
+      column.eachCell!({ includeEmpty: true }, (cell, rowNumber) => {
+        const cellValue = cell.value ? cell.value.toString() : '';
+        const cellLength = cellValue.length;
+        
+        // Account for bold text (takes more space)
+        const lengthMultiplier = cell.font?.bold ? 1.2 : 1;
+        const adjustedLength = Math.ceil(cellLength * lengthMultiplier);
+        
+        if (adjustedLength > maxLength) {
+          maxLength = adjustedLength;
+        }
+        
+        // Auto-align cells with proper settings
+        cell.alignment = {
+          vertical: 'middle',
+          wrapText: false,
+          shrinkToFit: false
+        };
+        
+        // Smart alignment based on content type
+        if (typeof cell.value === 'number') {
+          // Numbers align right
+          cell.alignment = { ...cell.alignment, horizontal: 'right' };
+        } else if (cell.font?.bold) {
+          // Headers/bold text align center
+          cell.alignment = { ...cell.alignment, horizontal: 'center' };
+        } else if (typeof cell.value === 'string') {
+          // Regular text aligns left
+          cell.alignment = { ...cell.alignment, horizontal: 'left' };
+        }
+      });
+      
+      // Set optimal width with proper padding (minimum 12, maximum 80)
+      // Add extra padding for better readability
+      column.width = Math.max(12, Math.min(maxLength + 4, 80));
+    });
+    
+    // Set default row height for better appearance
+    worksheet.eachRow((row, rowNumber) => {
+      if (!row.height) {
+        row.height = 18; // Default row height for better readability
+      }
+    });
   }
 
   // Format Excel sheets for better presentation
   private formatExcelSheet(sheet: XLSX.WorkSheet) {
     const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1');
     
-    // Set column widths
+    // Auto-adjust column widths based on content
     if (!sheet['!cols']) sheet['!cols'] = [];
-    for (let i = 0; i <= range.e.c; i++) {
-      sheet['!cols'][i] = { width: 20 };
+    for (let col = range.s.c; col <= range.e.c; col++) {
+      let maxWidth = 10;
+      for (let row = range.s.r; row <= range.e.r; row++) {
+        const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+        if (sheet[cellAddress] && sheet[cellAddress].v) {
+          const cellValue = sheet[cellAddress].v.toString();
+          const cellWidth = cellValue.length;
+          if (cellWidth > maxWidth) {
+            maxWidth = cellWidth;
+          }
+        }
+      }
+      // Add padding and set max width limit
+      sheet['!cols'][col] = { width: Math.min(maxWidth + 2, 50) };
     }
     
-    // Make headers bold and add borders
+    // Set row heights for header rows
+    if (!sheet['!rows']) sheet['!rows'] = [];
+    
+    // Make headers bold and add styling
     for (let row = range.s.r; row <= range.e.r; row++) {
       for (let col = range.s.c; col <= range.e.c; col++) {
         const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
         if (!sheet[cellAddress]) continue;
         
-        // Format header rows (first few rows)
-        if (row <= 1 || (sheet[cellAddress].v && typeof sheet[cellAddress].v === 'string' && 
-            (sheet[cellAddress].v.includes('CHART') || sheet[cellAddress].v.includes('SUMMARY') || 
-             sheet[cellAddress].v.includes('INSIGHTS') || sheet[cellAddress].v.includes('PERFORMANCE')))) {
+        const cellValue = sheet[cellAddress].v ? sheet[cellAddress].v.toString() : '';
+        
+        // Style GPS HIT FIT SPORTS APPAREL header
+        if (cellValue.includes('GPS HIT FIT SPORTS APPAREL')) {
           if (!sheet[cellAddress].s) sheet[cellAddress].s = {};
-          sheet[cellAddress].s.font = { bold: true };
+          sheet[cellAddress].s.font = { bold: true, sz: 20, color: { rgb: "780001" } };
+          sheet[cellAddress].s.alignment = { horizontal: 'center', vertical: 'center' };
+          sheet[cellAddress].s.fill = { fgColor: { rgb: "FFD700" } };
+          sheet['!rows'][row] = { hpt: 30 }; // Set row height
+        }
+        
+        // Style logo link
+        if (cellValue.includes('Logo:') || cellValue.includes('https://i.ibb.co')) {
+          if (!sheet[cellAddress].s) sheet[cellAddress].s = {};
+          sheet[cellAddress].s.font = { bold: true, sz: 12, color: { rgb: "0000FF" }, underline: true };
+          sheet[cellAddress].s.alignment = { horizontal: 'center', vertical: 'center' };
+          // Add hyperlink
+          if (!sheet[cellAddress].l) {
+            sheet[cellAddress].l = { Target: 'https://i.ibb.co/MyHC2QgX/GPS-HIT-FIT-LOGO.png', Tooltip: 'Click to view company logo' };
+          }
+          sheet['!rows'][row] = { hpt: 25 }; // Set row height
+        }
+        
+        // Format report title rows
+        if (cellValue.includes('REPORT') || cellValue.includes('ORDER MANAGEMENT') || 
+            cellValue.includes('SALES') || cellValue.includes('COMPLETION REMARKS')) {
+          if (!sheet[cellAddress].s) sheet[cellAddress].s = {};
+          sheet[cellAddress].s.font = { bold: true, sz: 16 };
+          sheet[cellAddress].s.alignment = { horizontal: 'center', vertical: 'center' };
           sheet[cellAddress].s.fill = { fgColor: { rgb: "CCCCCC" } };
+          sheet['!rows'][row] = { hpt: 25 };
+        }
+        
+        // Format section headers
+        if (row <= 1 || (cellValue && 
+            (cellValue.includes('CHART') || cellValue.includes('SUMMARY') || 
+             cellValue.includes('INSIGHTS') || cellValue.includes('PERFORMANCE') ||
+             cellValue.includes('INFORMATION') || cellValue.includes('BREAKDOWN') ||
+             cellValue.includes('METRICS') || cellValue.includes('DISTRIBUTION')))) {
+          if (!sheet[cellAddress].s) sheet[cellAddress].s = {};
+          sheet[cellAddress].s.font = { bold: true, sz: 14 };
+          sheet[cellAddress].s.fill = { fgColor: { rgb: "E0E0E0" } };
+          sheet[cellAddress].s.alignment = { horizontal: 'center', vertical: 'center' };
         }
         
         // Format currency values
@@ -2253,6 +3077,11 @@ private fetchYourProductsAndOrders(userEmail: string) {
     // Apply status filter
     if (this.statusFilter !== 'all') {
       filtered = filtered.filter(order => order.status === this.statusFilter);
+    }
+
+    // Apply size filter
+    if (this.sizeFilter !== 'all') {
+      filtered = filtered.filter(order => order.size === this.sizeFilter);
     }
 
     // Apply search filter
@@ -2320,6 +3149,12 @@ private fetchYourProductsAndOrders(userEmail: string) {
     this.applyFiltersAndSort();
   }
 
+  // Filter by size
+  filterBySize(size: string) {
+    this.sizeFilter = size;
+    this.applyFiltersAndSort();
+  }
+
   // Search orders
   searchOrders(searchTerm: string) {
     this.searchTerm = searchTerm;
@@ -2330,6 +3165,7 @@ private fetchYourProductsAndOrders(userEmail: string) {
   clearFilters() {
     this.searchTerm = '';
     this.statusFilter = 'all';
+    this.sizeFilter = 'all';
     this.sortField = 'id';
     this.sortDirection = 'desc';
     this.applyFiltersAndSort();
@@ -2354,6 +3190,35 @@ private fetchYourProductsAndOrders(userEmail: string) {
       return this.customerOrders.length;
     }
     return this.customerOrders.filter(order => order.status === status).length;
+  }
+
+  // Get available sizes from orders
+  getAvailableSizes(): string[] {
+    const sizes = this.customerOrders
+      .map(order => order.size)
+      .filter((size): size is string => size !== undefined && size !== null && size.trim() !== '')
+      .filter((value, index, self) => self.indexOf(value) === index); // Remove duplicates
+    
+    // Define the correct size order
+    const sizeOrder = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
+    
+    // Sort sizes according to the defined order
+    return sizes.sort((a, b) => {
+      const indexA = sizeOrder.indexOf(a.toUpperCase());
+      const indexB = sizeOrder.indexOf(b.toUpperCase());
+      
+      // If both sizes are in the predefined order, sort by their position
+      if (indexA !== -1 && indexB !== -1) {
+        return indexA - indexB;
+      }
+      
+      // If only one size is in the predefined order, prioritize it
+      if (indexA !== -1) return -1;
+      if (indexB !== -1) return 1;
+      
+      // If neither size is in the predefined order, sort alphabetically
+      return a.localeCompare(b);
+    });
   }
 
   // Track by function for ngFor performance
@@ -2404,39 +3269,48 @@ private fetchYourProductsAndOrders(userEmail: string) {
 
     // Capture the order in a local variable to prevent it from being null after modal closes
     const orderToUpdate = this.selectedOrder;
+    
+    // Close the order details modal first to avoid z-index conflicts
+    this.closeOrderModal();
 
-    Swal.fire({
-      title: 'Accept Production Order',
-      html: `
-        <p style="margin-bottom: 15px;">This order was placed for an out-of-stock size.</p>
-        <p style="margin-bottom: 15px;">Please enter the pickup date now that production is complete:</p>
-        <input type="date" id="production-pickup-date" class="swal2-input" style="width: 80%; margin: 10px auto; display: block;" min="${new Date().toISOString().split('T')[0]}">
-      `,
-      icon: 'info',
-      showCancelButton: true,
-      confirmButtonText: 'Accept Order',
-      cancelButtonText: 'Cancel',
-      confirmButtonColor: '#28a745',
-      preConfirm: () => {
-        const pickupDateInput = document.getElementById('production-pickup-date') as HTMLInputElement;
-        const pickupDate = pickupDateInput?.value;
-        
-        if (!pickupDate) {
-          Swal.showValidationMessage('Please select a pickup date');
-          return false;
+    // Small delay to ensure modal is fully closed before showing SweetAlert
+    setTimeout(() => {
+      Swal.fire({
+        title: 'Accept Production Order',
+        html: `
+          <p style="margin-bottom: 15px;">This order was placed for an out-of-stock size.</p>
+          <p style="margin-bottom: 15px;">Please enter the pickup date now that production is complete:</p>
+          <input type="date" id="production-pickup-date" class="swal2-input" style="width: 80%; margin: 10px auto; display: block;" min="${new Date().toISOString().split('T')[0]}">
+        `,
+        icon: 'info',
+        showCancelButton: true,
+        confirmButtonText: 'Accept Order',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#28a745',
+        customClass: {
+          container: 'swal-on-top'
+        },
+        preConfirm: () => {
+          const pickupDateInput = document.getElementById('production-pickup-date') as HTMLInputElement;
+          const pickupDate = pickupDateInput?.value;
+          
+          if (!pickupDate) {
+            Swal.showValidationMessage('Please select a pickup date');
+            return false;
+          }
+          
+          return { pickupDate };
         }
-        
-        return { pickupDate };
-      }
-    }).then((result) => {
-      if (result.isConfirmed && result.value) {
-        this.updateProductionOrderStatus(orderToUpdate, result.value.pickupDate);
-      }
-    });
+      }).then((result) => {
+        if (result.isConfirmed && result.value) {
+          this.updateProductionOrderStatus(orderToUpdate, result.value.pickupDate);
+        }
+      });
+    }, 100);
   }
 
   updateProductionOrderStatus(order: Order, pickupDate: string) {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('auth_token');
     
     if (!token) {
       Swal.fire('Error', 'Authentication required', 'error');
@@ -2450,7 +3324,8 @@ private fetchYourProductsAndOrders(userEmail: string) {
 
     const headers = new HttpHeaders().set('Authorization', `Bearer ${token}`);
     
-    this.http.put(`http://localhost:3001/api/orders/${order.id}`, {
+    this.http.put(`${this.apiUrl}orders/${order.id}`, {
+
       status: 'ready-for-pickup',
       pickup_date: pickupDate
     }, { headers }).subscribe({
@@ -2480,9 +3355,6 @@ private fetchYourProductsAndOrders(userEmail: string) {
       }
     });
   }
-
-  // Base URL for images
-  private baseUrl: string = 'http://localhost:3001/e-comm-images/';
 
   // Get image URL - ensure we display the exact product image
   getImageUrl(image: string): string {
@@ -2572,6 +3444,8 @@ private fetchYourProductsAndOrders(userEmail: string) {
   openRemarksModal(order: Order): void {
     this.remarksOrder = order;
     this.completionRemarks = order.completion_remarks || '';
+    this.selectedSize = order.size || '';
+    this.getProductSizes(order.product);
     this.showRemarksModal = true;
   }
 
@@ -2579,6 +3453,8 @@ private fetchYourProductsAndOrders(userEmail: string) {
   closeRemarksModal(): void {
     this.showRemarksModal = false;
     this.completionRemarks = '';
+    this.selectedSize = '';
+    this.availableSizes = [];
     this.remarksOrder = null;
   }
 
@@ -2588,12 +3464,15 @@ private fetchYourProductsAndOrders(userEmail: string) {
       return;
     }
 
-    // Validate remarks input
-    if (!this.completionRemarks || this.completionRemarks.trim() === '') {
+    // Check if size was changed
+    const sizeChanged = this.selectedSize !== this.remarksOrder.size;
+
+    // Validate remarks input (only required if size is not being changed)
+    if ((!this.completionRemarks || this.completionRemarks.trim() === '') && !sizeChanged) {
       Swal.fire({
         icon: 'warning',
-        title: 'Remarks Required',
-        text: 'Please enter your remarks before submitting.',
+        title: 'Input Required',
+        text: 'Please enter remarks or change the size before submitting.',
         timer: 2000,
         showConfirmButton: false
       });
@@ -2614,17 +3493,29 @@ private fetchYourProductsAndOrders(userEmail: string) {
       return;
     }
 
+    console.log('📦 Submitting completion remarks with data:', {
+      orderId: this.remarksOrder.id,
+      remarks: this.completionRemarks.trim(),
+      size: this.selectedSize,
+      originalSize: this.remarksOrder.size,
+      sizeChanged: sizeChanged
+    });
+
     // Update local order optimistically
     const originalRemarks = this.remarksOrder.completion_remarks;
+    const originalSize = this.remarksOrder.size;
     this.remarksOrder.completion_remarks = this.completionRemarks.trim();
+    this.remarksOrder.size = this.selectedSize;
 
-    // Call API to save completion remarks
+    // Call API to save completion remarks and size
     this.http.post(
-      `http://localhost:3001/api/orders?admin=${encodeURIComponent(userEmail)}`,
+      `${this.apiUrl}orders?admin=${encodeURIComponent(userEmail)}`,
+
       { 
         action: 'update-completion-remarks', 
         orderId: this.remarksOrder.id,
-        remarks: this.completionRemarks.trim()
+        remarks: this.completionRemarks.trim(),
+        size: this.selectedSize
       },
       { 
         withCredentials: true,
@@ -2635,20 +3526,44 @@ private fetchYourProductsAndOrders(userEmail: string) {
       next: (response: string) => {
         console.log('✅ COMPLETION REMARKS RESPONSE:', response);
         
+        // Update the order in customerOrders array to persist the change
+        const orderIndex = this.customerOrders.findIndex(o => o.id === this.remarksOrder!.id);
+        if (orderIndex !== -1) {
+          this.customerOrders[orderIndex].completion_remarks = this.completionRemarks.trim();
+          this.customerOrders[orderIndex].size = this.selectedSize;
+        }
+        
+        // Update remarksOrder reference to reflect the change
+        if (this.remarksOrder) {
+          this.remarksOrder.completion_remarks = this.completionRemarks.trim();
+          this.remarksOrder.size = this.selectedSize;
+        }
+        
+        // Update selectedOrder if it's the same order (for order details modal)
+        if (this.selectedOrder && this.selectedOrder.id === this.remarksOrder!.id) {
+          this.selectedOrder.completion_remarks = this.completionRemarks.trim();
+          this.selectedOrder.size = this.selectedSize;
+        }
+        
         // Close the remarks modal
         this.closeRemarksModal();
         
         // Show success message
+        const message = sizeChanged 
+          ? `Remarks and size (${this.selectedSize}) have been updated successfully.`
+          : 'Completion remarks have been saved successfully.';
+        
         Swal.fire({
           icon: 'success',
-          title: 'Remarks Saved!',
-          text: 'Completion remarks have been saved successfully.',
+          title: 'Updated!',
+          text: message,
           timer: 2000,
           showConfirmButton: false
         });
         
-        // Refresh orders to get updated data
+        // Refresh orders and analytics to reflect size change
         this.fetchOrders();
+        this.calculateAnalytics();
       },
       error: (err) => {
         console.error('❌ COMPLETION REMARKS ERROR:', err);
@@ -2656,6 +3571,7 @@ private fetchYourProductsAndOrders(userEmail: string) {
         // Revert local changes
         if (this.remarksOrder) {
           this.remarksOrder.completion_remarks = originalRemarks;
+          this.remarksOrder.size = originalSize;
         }
         
         // Show error message
@@ -2775,6 +3691,8 @@ private fetchYourProductsAndOrders(userEmail: string) {
         this.closeOrNumberModal();
         this.closeOrderModal();
         this.fetchOrders();
+        // Refresh inventory to update confirmed orders count
+        this.fetchInventory();
       },
       error: (error) => {
         console.error('Error confirming pickup:', error);
@@ -2792,6 +3710,172 @@ private fetchYourProductsAndOrders(userEmail: string) {
         Swal.fire('Error', errorMessage, 'error');
       }
     });
+  }
+
+  // Get available sizes for a product
+  getProductSizes(productName: string): void {
+    const product = this.products.find(p => p.name === productName);
+    
+    if (product && (product as any).available_sizes) {
+      try {
+        const sizes = (product as any).available_sizes;
+        this.availableSizes = Array.isArray(sizes) ? sizes : JSON.parse(sizes);
+      } catch (e) {
+        // If parsing fails, use default sizes
+        this.availableSizes = ['S', 'M', 'L', 'XL'];
+      }
+    } else {
+      // Default sizes if product not found or no sizes defined
+      this.availableSizes = ['S', 'M', 'L', 'XL'];
+    }
+  }
+
+  // Get filtered sizes (exclude current size from dropdown)
+  getFilteredSizes(): string[] {
+    if (!this.remarksOrder || !this.remarksOrder.size) {
+      return this.availableSizes;
+    }
+    return this.availableSizes.filter(size => size !== this.remarksOrder!.size);
+  }
+
+  // ===== RATING MANAGEMENT =====
+  
+  // Fetch all ratings
+  fetchRatings(): void {
+    this.ratingsLoading = true;
+    this.productService.getAllRatings().subscribe({
+      next: (response: any) => {
+        console.log('✅ Ratings loaded:', response);
+        if (response.success) {
+          this.ratings = response.ratings || [];
+          this.applyRatingFilters();
+        } else {
+          console.error('Failed to load ratings:', response.error);
+          Swal.fire('Error', 'Failed to load ratings', 'error');
+        }
+        this.ratingsLoading = false;
+      },
+      error: (error) => {
+        console.error('❌ Error loading ratings:', error);
+        this.ratingsLoading = false;
+        
+        let errorMessage = 'Failed to load ratings. ';
+        if (error.status === 0) {
+          errorMessage += 'Server is not responding.';
+        } else if (error.status === 401) {
+          errorMessage += 'Please login again.';
+        } else if (error.status === 404) {
+          errorMessage += 'Ratings table may not exist. Run the migration.';
+        }
+        
+        Swal.fire('Error', errorMessage, 'error');
+      }
+    });
+  }
+
+  // Switch to ratings view
+  showRatings(): void {
+    this.currentView = 'ratings';
+    if (this.ratings.length === 0) {
+      this.fetchRatings();
+    }
+  }
+
+  // Apply rating filters
+  applyRatingFilters(): void {
+    let filtered = [...this.ratings];
+
+    // Apply rating filter
+    if (this.ratingFilterRating !== 'all') {
+      const targetRating = parseInt(this.ratingFilterRating);
+      filtered = filtered.filter(r => r.rating === targetRating);
+    }
+
+    // Apply search filter
+    if (this.ratingSearchTerm.trim()) {
+      const searchLower = this.ratingSearchTerm.toLowerCase().trim();
+      filtered = filtered.filter(r => 
+        r.product_name?.toLowerCase().includes(searchLower) ||
+        r.user_name?.toLowerCase().includes(searchLower) ||
+        r.user_email?.toLowerCase().includes(searchLower) ||
+        r.review?.toLowerCase().includes(searchLower) ||
+        r.order_id.toString().includes(searchLower)
+      );
+    }
+
+    this.filteredRatings = filtered;
+  }
+
+  // Get star array for display
+  getStarArray(rating: number): boolean[] {
+    return Array(5).fill(false).map((_, i) => i < rating);
+  }
+
+  // Get rating color
+  getRatingColor(rating: number): string {
+    if (rating >= 5) return '#FFD700'; // Gold
+    if (rating >= 4) return '#4CAF50'; // Green
+    if (rating >= 3) return '#FF9800'; // Orange
+    if (rating >= 2) return '#FF5722'; // Red-Orange
+    return '#F44336'; // Red
+  }
+
+  // Get rating badge class
+  getRatingBadgeClass(rating: number): string {
+    if (rating >= 5) return 'rating-excellent';
+    if (rating >= 4) return 'rating-good';
+    if (rating >= 3) return 'rating-average';
+    if (rating >= 2) return 'rating-poor';
+    return 'rating-bad';
+  }
+
+  // Calculate average rating
+  getAverageRating(): number {
+    if (this.ratings.length === 0) return 0;
+    const sum = this.ratings.reduce((acc, r) => acc + r.rating, 0);
+    return sum / this.ratings.length;
+  }
+
+  // Get rating distribution
+  getRatingDistribution(): {[key: number]: number} {
+    const distribution: {[key: number]: number} = {5: 0, 4: 0, 3: 0, 2: 0, 1: 0};
+    this.ratings.forEach(r => {
+      if (r.rating >= 1 && r.rating <= 5) {
+        distribution[r.rating]++;
+      }
+    });
+    return distribution;
+  }
+
+  // Get rating percentage for distribution bar
+  getRatingPercentage(count: number): number {
+    if (this.ratings.length === 0) return 0;
+    return (count / this.ratings.length) * 100;
+  }
+
+  // Format date for display
+  formatRatingDate(dateString: string): string {
+    if (!dateString) return 'No date';
+    const date = new Date(dateString);
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+  }
+
+  // Export ratings to Excel
+  exportRatings(): void {
+    const exportData = this.filteredRatings.map(rating => ({
+      'Order #': rating.order_id,
+      'Product': rating.product_name || 'N/A',
+      'Customer': rating.user_name || rating.user_email || 'N/A',
+      'Rating': rating.rating + ' stars',
+      'Review': rating.review || 'No review',
+      'Date': this.formatRatingDate(rating.created_at)
+    }));
+
+    const worksheet: XLSX.WorkSheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook: XLSX.WorkBook = { Sheets: { 'Ratings': worksheet }, SheetNames: ['Ratings'] };
+    const excelBuffer: any = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+    const data: Blob = new Blob([excelBuffer], { type: 'application/octet-stream' });
+    FileSaver.saveAs(data, `ratings_export_${new Date().toISOString().split('T')[0]}.xlsx`);
   }
 
   logout() {

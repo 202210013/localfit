@@ -282,6 +282,32 @@
   gap: 6px;
 }
 
+.pickup-date-info {
+  margin: 8px 0;
+  color: #0891b2;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, #ecfeff 0%, #cffafe 100%);
+  border: 2px solid #67e8f9;
+  border-radius: 8px;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(8, 145, 178, 0.15);
+}
+
+.pickup-date-info i {
+  font-size: 16px;
+  color: #0891b2;
+  flex-shrink: 0;
+}
+
+.pickup-date-info strong {
+  color: #0e7490;
+  font-weight: 700;
+}
+
 .decline-reason {
   margin: 8px 0;
   color: #dc3545;
@@ -577,4 +603,172 @@
   font-size: 14px;
   line-height: 1.5;
   margin-left: 24px;
+}
+/* Rating button styling */
+.rate-btn {
+  margin-top: 12px;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #FFD700, #FFA500);
+  color: #333;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(255, 215, 0, 0.3);
+}
+
+.rate-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #FFA500, #FF8C00);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 215, 0, 0.4);
+}
+
+.rate-btn:disabled,
+.rate-btn.rated {
+  background: linear-gradient(135deg, #6c757d, #5a6268);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.rate-btn:disabled:hover,
+.rate-btn.rated:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.rate-btn i {
+  font-size: 16px;
+}
+
+/* ==================== ENHANCED RATING MODAL STYLES ==================== */
+
+/* Star rating in SweetAlert */
+.star-rating i {
+  color: #ddd;
+  transition: all 0.2s ease;
+  margin: 0 4px;
+  cursor: pointer;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+}
+
+.star-rating i:hover {
+  color: #FFD700;
+  transform: scale(1.15);
+  filter: drop-shadow(0 4px 8px rgba(255, 215, 0, 0.4));
+}
+
+.star-rating i.fa-solid {
+  color: #FFD700;
+  animation: starPop 0.3s ease;
+}
+
+@keyframes starPop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.3); }
+  100% { transform: scale(1.1); }
+}
+
+/* Custom modal styling */
+::ng-deep .rating-modal-popup {
+  border-radius: 16px !important;
+  padding: 0 !important;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2) !important;
+  max-width: 600px !important;
+  overflow-x: hidden !important;
+}
+
+::ng-deep .rating-modal-popup .swal2-title {
+  padding: 30px 30px 10px 30px !important;
+  margin: 0 !important;
+}
+
+::ng-deep .rating-modal-popup .swal2-html-container {
+  margin: 0 !important;
+  padding: 10px 30px 20px 30px !important;
+  overflow-x: hidden !important;
+}
+
+::ng-deep .rating-confirm-btn {
+  padding: 12px 32px !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  border-radius: 8px !important;
+  transition: all 0.3s ease !important;
+  box-shadow: 0 4px 12px rgba(120, 0, 1, 0.3) !important;
+}
+
+::ng-deep .rating-confirm-btn:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 20px rgba(120, 0, 1, 0.4) !important;
+}
+
+::ng-deep .rating-cancel-btn {
+  padding: 12px 32px !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  border-radius: 8px !important;
+  transition: all 0.3s ease !important;
+}
+
+::ng-deep .rating-cancel-btn:hover {
+  background-color: #5a6268 !important;
+}
+
+/* Textarea styling in modal */
+::ng-deep .rating-modal-popup .swal2-textarea {
+  border: 2px solid #dee2e6 !important;
+  border-radius: 8px !important;
+  padding: 12px !important;
+  font-size: 14px !important;
+  line-height: 1.5 !important;
+  transition: border-color 0.3s ease !important;
+}
+
+::ng-deep .rating-modal-popup .swal2-textarea:focus {
+  border-color: #780001 !important;
+  box-shadow: 0 0 0 0.2rem rgba(120, 0, 1, 0.15) !important;
+  outline: none !important;
+}
+
+/* Validation message styling */
+::ng-deep .rating-modal-popup .swal2-validation-message {
+  background: #dc3545 !important;
+  color: white !important;
+  border-radius: 8px !important;
+  padding: 10px 15px !important;
+  font-size: 14px !important;
+  margin: 10px 0 0 0 !important;
+}
+
+/* Rating button styling */
+.rate-btn {
+  margin-top: 12px;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #FFD700, #FFA500);
+  color: #333;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(255, 215, 0, 0.3);
+}
+
+.rate-btn:hover {
+  background: linear-gradient(135deg, #FFA500, #FF8C00);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 165, 0, 0.4);
+}
+
+.rate-btn i {
+  font-size: 16px;
 }

@@ -1,45 +1,79 @@
 <div class="admin-container">
-  <!-- Top section with title and logout button aligned -->
-  <div class="top-section">
-    <h2 class="dashboard-title">Admin Dashboard</h2>
-    <div class="top-logout-section">
+  <!-- Mobile Menu Toggle -->
+  <button class="mobile-menu-toggle" (click)="toggleMobileMenu()">
+    <i class="fa-solid fa-bars"></i>
+  </button>
+  
+  <!-- Mobile Backdrop -->
+  <div class="mobile-backdrop" [class.show]="mobileMenuOpen" (click)="closeMobileMenu()"></div>
+  
+  <!-- Sidebar Navigation -->
+  <aside class="sidebar" [class.mobile-open]="mobileMenuOpen">
+    <div class="sidebar-header">
+      <h2 class="dashboard-title">Admin Dashboard</h2>
+    </div>
+    
+    <nav class="sidebar-nav">
+      <button 
+        [class.active]="currentView === 'analytics'" 
+        (click)="switchToAnalytics()"
+        class="nav-btn">
+        <i class="fa-solid fa-chart-line"></i>
+        <span>Dashboard</span>
+      </button>
+      <button 
+        [class.active]="currentView === 'orders'" 
+        (click)="switchToOrders()"
+        class="nav-btn">
+        <i class="fa-solid fa-list"></i>
+        <span>Orders</span>
+      </button>
+      <button 
+        [class.active]="currentView === 'report'" 
+        (click)="switchToReport()"
+        class="nav-btn">
+        <i class="fa-solid fa-file-lines"></i>
+        <span>Sales Report</span>
+      </button>
+      <button 
+        [class.active]="currentView === 'ratings'" 
+        (click)="showRatings()"
+        class="nav-btn">
+        <i class="fa-solid fa-star"></i>
+        <span>Ratings</span>
+      </button>
+      <button 
+        [class.active]="currentView === 'messages'" 
+        (click)="switchToMessages()"
+        class="nav-btn">
+        <i class="fa-solid fa-message"></i>
+        <span>Messages</span>
+      </button>
+      <button 
+        [class.active]="currentView === 'inventory'" 
+        (click)="switchToInventory()"
+        class="nav-btn">
+        <i class="fa-solid fa-warehouse"></i>
+        <span>Inventory</span>
+      </button>
+      <button 
+        (click)="switchToProducts()"
+        class="nav-btn">
+        <i class="fa-solid fa-box"></i>
+        <span>My Products</span>
+      </button>
+    </nav>
+    
+    <div class="sidebar-footer">
       <button class="logout-btn" (click)="logout()">
-        <i class="fa-solid fa-sign-out"></i> Logout
+        <i class="fa-solid fa-sign-out"></i>
+        <span>Logout</span>
       </button>
     </div>
-  </div>
+  </aside>
 
-
-  <!-- Header with Navigation -->
-  <div class="admin-header">
-    <div class="header-content">
-      <div class="nav-buttons">
-        <button 
-          [class.active]="currentView === 'analytics'" 
-          (click)="switchToAnalytics()"
-          class="nav-btn">
-          <i class="fa-solid fa-chart-line"></i> Dashboard
-        </button>
-        <button 
-          [class.active]="currentView === 'orders'" 
-          (click)="switchToOrders()"
-          class="nav-btn">
-          <i class="fa-solid fa-list"></i> Orders
-        </button>
-        <button 
-          [class.active]="currentView === 'report'" 
-          (click)="switchToReport()"
-          class="nav-btn">
-          <i class="fa-solid fa-file-lines"></i> Sales Report
-        </button>
-        <button 
-          (click)="switchToProducts()"
-          class="nav-btn">
-          <i class="fa-solid fa-box"></i> My Products
-        </button>
-      </div>
-    </div>
-  </div>
+  <!-- Main Content Area -->
+  <main class="main-content">
 
  <!-- Time Period Filter -->
   <div class="date-filter-section" *ngIf="currentView === 'analytics'">
@@ -343,6 +377,14 @@
           <i class="fa-solid fa-times"></i>
         </button>
       </div>
+
+      <div class="size-filter-container">
+        <i class="fa-solid fa-ruler-combined size-filter-icon"></i>
+        <select [(ngModel)]="sizeFilter" (ngModelChange)="filterBySize(sizeFilter)" class="size-filter">
+          <option value="all">All Sizes</option>
+          <option *ngFor="let size of getAvailableSizes()" [value]="size">{{ size }}</option>
+        </select>
+      </div>
       
       <div class="filter-controls">
         <select [(ngModel)]="statusFilter" (ngModelChange)="filterByStatus(statusFilter)" class="status-filter">
@@ -355,7 +397,7 @@
           <option value="completed">Completed Only</option>
         </select>
         
-        <button (click)="clearFilters()" class="clear-filters-btn" [disabled]="searchTerm === '' && statusFilter === 'all' && sortField === 'id'">
+        <button (click)="clearFilters()" class="clear-filters-btn" [disabled]="searchTerm === '' && statusFilter === 'all' && sizeFilter === 'all' && sortField === 'id'">
           <i class="fa-solid fa-filter-circle-xmark"></i> Clear Filters
         </button>
         
@@ -366,11 +408,12 @@
     </div>
 
     <!-- Results Info -->
-    <div class="results-info" *ngIf="filteredOrders.length !== customerOrders.length || searchTerm || statusFilter !== 'all'">
+    <div class="results-info" *ngIf="filteredOrders.length !== customerOrders.length || searchTerm || statusFilter !== 'all' || sizeFilter !== 'all'">
       <i class="fa-solid fa-info-circle"></i>
       Showing {{ filteredOrders.length }} of {{ customerOrders.length }} orders
       <span *ngIf="searchTerm"> matching "{{ searchTerm }}"</span>
       <span *ngIf="statusFilter !== 'all'"> with status "{{ statusFilter }}"</span>
+      <span *ngIf="sizeFilter !== 'all'"> with size "{{ sizeFilter }}"</span>
     </div>
 
     <div class="table-container">
@@ -415,7 +458,7 @@
             </td>
             <td data-label="Customer" class="customer-name">
               <i class="fa-solid fa-user"></i>
-              {{ order.customer }}
+              {{ order.customer_name || order.customer }}
             </td>
             <td data-label="Product" class="product-name">
               <i class="fa-solid fa-box"></i>
@@ -493,7 +536,337 @@
       </div>
     </div>
   </div>
-</div>
+
+  <!-- Ratings View -->
+  <div *ngIf="currentView === 'ratings'" class="ratings-section">
+    <div class="ratings-header">
+      <h3><i class="fa-solid fa-star"></i> Customer Ratings & Reviews</h3>
+      
+      <!-- Rating Statistics Summary -->
+      <div class="rating-summary-cards" *ngIf="ratings.length > 0">
+        <div class="summary-card">
+          <div class="summary-icon">
+            <i class="fa-solid fa-star"></i>
+          </div>
+          <div class="summary-content">
+            <p class="summary-label">Average Rating</p>
+            <p class="summary-value">{{ getAverageRating() | number:'1.1-1' }} ⭐</p>
+          </div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-icon">
+            <i class="fa-solid fa-comments"></i>
+          </div>
+          <div class="summary-content">
+            <p class="summary-label">Total Reviews</p>
+            <p class="summary-value">{{ ratings.length }}</p>
+          </div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-icon">
+            <i class="fa-solid fa-heart"></i>
+          </div>
+          <div class="summary-content">
+            <p class="summary-label">5-Star Ratings</p>
+            <p class="summary-value">{{ getRatingDistribution()[5] }}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filters and Search -->
+    <div class="ratings-controls" *ngIf="ratings.length > 0">
+      <div class="search-box">
+        <i class="fa-solid fa-search"></i>
+        <input 
+          type="text" 
+          [(ngModel)]="ratingSearchTerm" 
+          (input)="applyRatingFilters()"
+          placeholder="Search by customer, product, or review..."
+          class="search-input">
+        <button *ngIf="ratingSearchTerm" (click)="ratingSearchTerm=''; applyRatingFilters()" class="clear-search">
+          <i class="fa-solid fa-times"></i>
+        </button>
+      </div>
+      
+      <div class="filter-group">
+        <label for="ratingFilter">Filter by Rating:</label>
+        <select id="ratingFilter" [(ngModel)]="ratingFilterRating" (change)="applyRatingFilters()" class="filter-select">
+          <option value="all">All Ratings</option>
+          <option value="5">5 Stars ⭐⭐⭐⭐⭐</option>
+          <option value="4">4 Stars ⭐⭐⭐⭐</option>
+          <option value="3">3 Stars ⭐⭐⭐</option>
+          <option value="2">2 Stars ⭐⭐</option>
+          <option value="1">1 Star ⭐</option>
+        </select>
+      </div>
+
+      <button (click)="exportRatings()" class="export-btn" *ngIf="filteredRatings.length > 0">
+        <i class="fa-solid fa-download"></i>
+        Export to Excel
+      </button>
+    </div>
+
+    <!-- Results Info -->
+    <div class="results-info" *ngIf="ratings.length > 0 && (filteredRatings.length !== ratings.length || ratingSearchTerm || ratingFilterRating !== 'all')">
+      <p>
+        Showing <strong>{{ filteredRatings.length }}</strong> of <strong>{{ ratings.length }}</strong> ratings
+        <span *ngIf="ratingFilterRating !== 'all'"> • Filtered by: {{ ratingFilterRating }} stars</span>
+        <span *ngIf="ratingSearchTerm"> • Search: "{{ ratingSearchTerm }}"</span>
+      </p>
+      <button (click)="ratingSearchTerm=''; ratingFilterRating='all'; applyRatingFilters()" class="clear-filters-btn">
+        <i class="fa-solid fa-filter-circle-xmark"></i>
+        Clear All Filters
+      </button>
+    </div>
+
+    <!-- Rating Distribution Chart -->
+    <div class="rating-distribution" *ngIf="ratings.length > 0">
+      <h4>Rating Distribution</h4>
+      <div class="distribution-bars">
+        <div class="distribution-row" *ngFor="let star of [5, 4, 3, 2, 1]">
+          <span class="star-label">{{ star }} ⭐</span>
+          <div class="bar-container">
+            <div 
+              class="bar-fill" 
+              [class.rating-excellent]="star === 5"
+              [class.rating-good]="star === 4"
+              [class.rating-average]="star === 3"
+              [class.rating-poor]="star === 2"
+              [class.rating-bad]="star === 1"
+              [style.width.%]="getRatingPercentage(getRatingDistribution()[star])">
+            </div>
+          </div>
+          <span class="bar-count">{{ getRatingDistribution()[star] }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ratings Table -->
+    <div class="ratings-table-wrapper" *ngIf="!ratingsLoading && filteredRatings.length > 0">
+      <table class="ratings-table">
+        <thead>
+          <tr>
+            <th>Order #</th>
+            <th>Customer</th>
+            <th>Product</th>
+            <th>Rating</th>
+            <th>Review</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let rating of filteredRatings" [class]="getRatingBadgeClass(rating.rating)">
+            <td class="order-id">#{{ rating.order_id }}</td>
+            <td class="customer-info">
+              <div class="customer-name">{{ rating.user_name || 'Anonymous' }}</div>
+              <div class="customer-email">{{ rating.user_email || 'N/A' }}</div>
+            </td>
+            <td class="product-name">{{ rating.product_name || 'Product #' + rating.product_id }}</td>
+            <td class="rating-stars">
+              <div class="stars-display" [style.color]="getRatingColor(rating.rating)">
+                <i *ngFor="let filled of getStarArray(rating.rating)" 
+                   [class]="filled ? 'fa-solid fa-star' : 'fa-regular fa-star'">
+                </i>
+              </div>
+              <span class="rating-number">{{ rating.rating }}/5</span>
+            </td>
+            <td class="review-text">
+              <div class="review-content" *ngIf="rating.review">{{ rating.review }}</div>
+              <div class="no-review" *ngIf="!rating.review">
+                <em>No review provided</em>
+              </div>
+            </td>
+            <td class="rating-date">{{ formatRatingDate(rating.created_at) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Loading State -->
+    <div *ngIf="ratingsLoading" class="loading-state">
+      <i class="fa-solid fa-spinner fa-spin"></i>
+      <p>Loading ratings...</p>
+    </div>
+
+    <!-- No Ratings State -->
+    <div *ngIf="!ratingsLoading && ratings.length === 0" class="no-ratings">
+      <i class="fa-solid fa-star"></i>
+      <h4>No Ratings Yet</h4>
+      <p>Customer ratings will appear here once orders are completed and rated.</p>
+    </div>
+
+    <!-- No Results After Filter -->
+    <div *ngIf="!ratingsLoading && ratings.length > 0 && filteredRatings.length === 0" class="no-results">
+      <i class="fa-solid fa-search"></i>
+      <h4>No Results Found</h4>
+      <p>No ratings match your current search and filter criteria.</p>
+      <button (click)="ratingSearchTerm=''; ratingFilterRating='all'; applyRatingFilters()" class="clear-btn">
+        <i class="fa-solid fa-filter-circle-xmark"></i>
+        Clear Filters
+      </button>
+    </div>
+  </div>
+
+  <!-- Messages View -->
+  <div *ngIf="currentView === 'messages'" class="messages-section">
+    <app-message></app-message>
+  </div>
+
+  <!-- Inventory Management View -->
+  <div *ngIf="currentView === 'inventory'" class="inventory-section">
+    <div class="inventory-header">
+      <h3><i class="fa-solid fa-warehouse"></i> Inventory Management</h3>
+      <div class="inventory-controls">
+        <div class="inventory-search">
+          <i class="fa-solid fa-search"></i>
+          <input 
+            type="text" 
+            [(ngModel)]="inventorySearchTerm" 
+            (input)="filterInventory()"
+            placeholder="Search product or size..."
+            class="search-input">
+          <button *ngIf="inventorySearchTerm" (click)="inventorySearchTerm=''; filterInventory()" class="clear-search">
+            <i class="fa-solid fa-times"></i>
+          </button>
+        </div>
+        <button (click)="toggleLowStockFilter()" class="low-stock-filter-btn" [class.active]="showOnlyLowStock">
+          <i class="fa-solid fa-exclamation-triangle"></i>
+          Low Stock Only
+          <span class="low-stock-count" *ngIf="getLowStockCount() > 0">({{ getLowStockCount() }})</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Loading State -->
+    <div *ngIf="inventoryLoading" class="loading-state">
+      <i class="fa-solid fa-spinner fa-spin"></i>
+      <p>Loading inventory...</p>
+    </div>
+
+    <!-- Inventory Table -->
+    <div *ngIf="!inventoryLoading" class="inventory-table-container">
+      <table class="inventory-table">
+        <thead>
+          <tr>
+            <th>Image</th>
+            <th>Product</th>
+            <th class="size-column">Size</th>
+            <th class="starting-stock-column">Starting Stock</th>
+            <th class="current-stock-column">Current Stock</th>
+            <th class="confirmed-orders-column">Confirmed Orders</th>
+            <th class="sold-column">Sold</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <ng-container *ngFor="let entry of filteredInventory">
+            <tr *ngFor="let row of entry.sizes">
+              <td class="product-image">
+                <img [src]="getImageUrl(entry.product.image)" [alt]="entry.product.name" class="inventory-product-img" (error)="onImageError($event)">
+              </td>
+              <td class="product-name">
+                <i class="fa-solid fa-box"></i>
+                {{ entry.product.name }}
+              </td>
+              <td class="size" data-label="Size">
+                <span class="size-badge">{{ row.size }}</span>
+              </td>
+              <td class="starting-stock" data-label="Starting Stock">{{ row.starting }}</td>
+              <td class="current-stock" data-label="Current Stock">
+                <span class="stock-badge" [class.low-stock]="row.current < 10">
+                  {{ row.current }}
+                </span>
+              </td>
+              <td class="confirmed-orders" data-label="Confirmed Orders">
+                <span class="confirmed-badge">{{ row.confirmedOrders }}</span>
+              </td>
+              <td class="sold" data-label="Sold">{{ row.sold }}</td>
+              <td class="action">
+                <button (click)="openAddStockModal(row)" class="add-stock-btn">
+                  <i class="fa-solid fa-plus"></i>
+                  Add Stock
+                </button>
+              </td>
+            </tr>
+          </ng-container>
+        </tbody>
+      </table>
+
+      <!-- No Inventory State -->
+      <div *ngIf="filteredInventory.length === 0 && inventoryItems.length === 0" class="no-inventory">
+        <i class="fa-solid fa-warehouse"></i>
+        <h4>No Inventory Found</h4>
+        <p>No products with sizes available. Add products with size options to see them here.</p>
+      </div>
+
+      <!-- No Results After Filter -->
+      <div *ngIf="filteredInventory.length === 0 && inventoryItems.length > 0" class="no-results">
+        <i class="fa-solid fa-search"></i>
+        <h4>No Results Found</h4>
+        <p>No inventory items match your search criteria.</p>
+        <button (click)="inventorySearchTerm=''; filterInventory()" class="clear-btn">
+          <i class="fa-solid fa-filter-circle-xmark"></i>
+          Clear Search
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Stock Modal -->
+  <div *ngIf="showAddStockModal" class="modal-overlay" (click)="closeAddStockModal()">
+    <div class="modal-content stock-modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-plus-circle"></i> Add Stock</h3>
+        <button class="close-btn" (click)="closeAddStockModal()">
+          <i class="fa-solid fa-times"></i>
+        </button>
+      </div>
+      
+      <div class="modal-body" *ngIf="selectedInventoryItem">
+        <div class="stock-info">
+          <p class="product-info">
+            <strong>Product:</strong> {{ selectedInventoryItem.productName }}<br>
+            <strong>Size:</strong> <span class="size-badge">{{ selectedInventoryItem.size }}</span><br>
+            <strong>Current Stock:</strong> <span class="stock-value">{{ selectedInventoryItem.current }}</span>
+          </p>
+          
+          <div class="quantity-section">
+            <label for="addStockQuantity" class="quantity-label">
+              <i class="fa-solid fa-box"></i>
+              Quantity to Add <span class="required"></span>
+            </label>
+            <input 
+              type="number" 
+              id="addStockQuantity"
+              [(ngModel)]="addStockQuantity" 
+              class="quantity-input"
+              placeholder="Enter quantity"
+              min="1"
+              autocomplete="off"
+            />
+            <small class="quantity-helper-text">
+              New stock will be: <strong>{{ selectedInventoryItem.current + (addStockQuantity || 0) }}</strong>
+            </small>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button 
+          (click)="confirmAddStock()"
+          class="confirm-stock-btn"
+          [disabled]="!addStockQuantity || addStockQuantity <= 0">
+          <i class="fa-solid fa-check"></i>
+          Confirm
+        </button>
+        <button (click)="closeAddStockModal()" class="cancel-btn">
+          <i class="fa-solid fa-times"></i>
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
 
 <!-- Order Details Modal -->
 <div class="modal-overlay" *ngIf="showOrderModal" (click)="closeOrderModal()">
@@ -671,7 +1044,7 @@
         <div class="or-number-section">
           <label for="orNumber" class="or-label">
             <i class="fa-solid fa-file-invoice"></i>
-            Official Receipt Number <span class="required">*</span>
+            Official Receipt Number <span class="required"></span>
           </label>
           <input 
             type="text" 
@@ -722,6 +1095,25 @@
           <span class="product-name">{{ remarksOrder.product }}</span><br>
           <span class="customer-name">Customer: {{ remarksOrder.customer_name || remarksOrder.customer }}</span>
         </p>
+        
+        <div class="size-change-section">
+          <label for="remarksSize" class="size-label">
+            <i class="fa-solid fa-arrows-rotate"></i>
+            Change Size (Optional)
+          </label>
+          <select 
+            id="remarksSize"
+            [(ngModel)]="selectedSize" 
+            class="size-select"
+          >
+            <option [value]="remarksOrder.size || ''">{{ remarksOrder.size || 'No Size' }} (Current)</option>
+            <option *ngFor="let size of getFilteredSizes()" [value]="size">{{ size }}</option>
+          </select>
+          <small class="size-helper-text">
+            <i class="fa-solid fa-info-circle"></i>
+            Select a different size if needed. Changes will be reflected in all reports.
+          </small>
+        </div>
         
         <div class="remarks-section">
           <label for="completionRemarks" class="remarks-label">

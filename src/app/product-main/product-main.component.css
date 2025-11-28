@@ -2126,6 +2126,34 @@ body{
   user-select: none;
 }
 
+/* Visitor Counter Styles */
+.visitor-counter {
+  margin: 15px 0;
+  padding: 8px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.counter-icon {
+  font-size: 1.2rem;
+  color: #6b7280;
+}
+
+.visitor-counter a {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  line-height: 1;
+}
+
+.visitor-counter img {
+  display: block;
+  height: auto;
+  max-height: 20px;
+}
+
 .footer-copyright {
   color: #6b7280;
   font-size: 0.9rem;

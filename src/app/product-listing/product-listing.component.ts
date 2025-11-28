@@ -7,6 +7,7 @@ import { Cart } from '../models/cart.models';
 import { AuthService } from '../services/auth.service';
 import { Router } from '@angular/router';
 import Swal from 'sweetalert2';
+import { environment } from '../../environments/environment';
 
 
 @Component({
@@ -20,7 +21,7 @@ export class AllProductsComponent implements OnInit {
   products: Product[] | undefined;
   allProducts: Product[] | undefined;
   productForm: FormGroup = new FormGroup({});
-  baseUrl: string = 'http://localhost:3001/e-comm-images/';
+  baseUrl: string = environment.imageBaseUrl;
   updateMode = false;
   updateForm: FormGroup = new FormGroup({});
   selectedProductId: number | null = null;
@@ -187,11 +188,11 @@ logout() {
     // If it's already just a filename, use it as is
     const finalUrl = this.baseUrl + imagePath;
     
-    console.log('🖼️ Image URL construction:', { 
-      original: image, 
-      processed: imagePath, 
-      final: finalUrl 
-    });
+    // console.log('🖼️ Image URL construction:', { 
+    //   original: image, 
+    //   processed: imagePath, 
+    //   final: finalUrl 
+    // });
     
     return finalUrl;
   }
@@ -679,24 +680,6 @@ logout() {
       error: (error: any) => {
         console.error('Error fetching ready for pickup orders:', error);
         this.readyForPickupCount = 0;
-      }
-    });
-
-    // Also check purchases
-    this.productService.getMyPurchases().subscribe({
-      next: (response: any) => {
-        const allPurchases = Array.isArray(response) ? response : (response.records || []);
-        
-        // Filter for current user's ready for pickup purchases
-        const readyForPickupPurchases = allPurchases.filter((order: any) => 
-          order.customer === currentUserEmail && order.status === 'ready-for-pickup'
-        );
-        
-        // Add to existing count (in case orders and purchases are separate)
-        this.readyForPickupCount += readyForPickupPurchases.length;
-      },
-      error: (error: any) => {
-        console.error('Error fetching ready for pickup purchases:', error);
       }
     });
   }

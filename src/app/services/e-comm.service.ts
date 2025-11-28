@@ -6,25 +6,24 @@ import { Product } from '../models/product.model';
 import { Cart } from '../models/cart.models';
 import { AuthService } from './auth.service';
 import { Router } from '@angular/router';
+import { environment } from '../../environments/environment';
 
 @Injectable({
     providedIn: 'root'
 })
 export class ProductService {
-    // Use only one base URL
-    // private apiUrl = 'https://api.localfit.store/ecomm_api/Router.php?request=';
-    // private apiUrl = 'http://localhost/E-comms/ecomm/e-comm/ecomm_api/Router.php?request=';
-    private apiUrl = 'http://localhost:3001/';
+    private apiUrl = environment.apiUrl;
+    public imageBaseUrl = environment.imageBaseUrl;
 
     constructor(private http: HttpClient, private authService: AuthService, private router: Router) { }
 
     private getHeaders(): HttpHeaders {
-  const token = localStorage.getItem('token');
-  return new HttpHeaders({
-    'Content-Type': 'application/json',
-    'Authorization': token ? `Bearer ${token}` : '',
-    'Accept': 'application/json'
-  });
+    const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+    return new HttpHeaders({
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : '',
+        'Accept': 'application/json'
+    });
 }
 
     // private getHeaders(): HttpHeaders {
@@ -32,7 +31,7 @@ export class ProductService {
     // }
 
 getProducts(): Observable<any> {
-    return this.http.get(`${this.apiUrl}api/products`, {
+    return this.http.get(`${this.apiUrl}products`, {
         headers: this.getHeaders(), withCredentials: true
     }).pipe(
         catchError(this.handleError),
@@ -41,7 +40,7 @@ getProducts(): Observable<any> {
 }
 
 getAllProducts(): Observable<any> {
-    return this.http.get(`${this.apiUrl}api/product-listing`, {
+    return this.http.get(`${this.apiUrl}product-listing`, {
         headers: this.getHeaders(), withCredentials: true
     }).pipe(
         catchError(this.handleError),
@@ -50,7 +49,7 @@ getAllProducts(): Observable<any> {
 }
 
 getAllProducts1(): Observable<any> {
-    return this.http.get(`${this.apiUrl}api/product-listing-offline`).pipe(
+    return this.http.get(`${this.apiUrl}product-listing-offline`).pipe(
         catchError(this.handleError),
         tap(response => console.log('Offline products fetched:', response))
     );
@@ -70,13 +69,13 @@ createProduct(product: any): Observable<any> {
     }
 
     // Create headers without Content-Type for FormData (browser sets it automatically)
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
     const headers = new HttpHeaders({
         'Authorization': token ? `Bearer ${token}` : '',
         'Accept': 'application/json'
     });
 
-    return this.http.post(`${this.apiUrl}api/products-create`, formData, {
+    return this.http.post(`${this.apiUrl}products-create`, formData, {
         headers: headers, withCredentials: true,
         reportProgress: true,
         observe: 'events'
@@ -87,7 +86,7 @@ createProduct(product: any): Observable<any> {
 }
 
 readOneProduct(productId: number): Observable<any> {
-    return this.http.get(`${this.apiUrl}api/products-read?id=${productId}`, {
+    return this.http.get(`${this.apiUrl}products-read?id=${productId}`, {
         headers: this.getHeaders(), withCredentials: true
     }).pipe(
         catchError(this.handleError),
@@ -97,24 +96,34 @@ readOneProduct(productId: number): Observable<any> {
 
 updateProduct(productId: number, formData: FormData): Observable<any> {
     // Create headers without Content-Type for FormData (browser sets it automatically)
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+    console.log('UpdateProduct - Token from localStorage:', token ? `${token.substring(0, 10)}...` : 'NO TOKEN');
+    console.log('UpdateProduct - Product ID:', productId);
+    
     const headers = new HttpHeaders({
         'Authorization': token ? `Bearer ${token}` : '',
         'Accept': 'application/json'
     });
+    
+    console.log('UpdateProduct - Headers:', headers.get('Authorization') ? 'Bearer token present' : 'NO AUTH HEADER');
 
-    return this.http.post(`${this.apiUrl}api/products-update/${productId}`, formData, {
+    return this.http.post(`${this.apiUrl}products-update/${productId}`, formData, {
         headers: headers, withCredentials: true,
         reportProgress: true,
         observe: 'events'
     }).pipe(
-        catchError(this.handleError),
+        catchError((error) => {
+            console.error('UpdateProduct - Error details:', error);
+            console.error('UpdateProduct - Error status:', error.status);
+            console.error('UpdateProduct - Error message:', error.message);
+            return this.handleError(error);
+        }),
         tap(response => console.log('Product updated:', response))
     );
 }
 
 deleteProduct(productId: number): Observable<any> {
-    return this.http.delete(`${this.apiUrl}api/products-delete/${productId}`, {
+    return this.http.delete(`${this.apiUrl}products-delete/${productId}`, {
         headers: this.getHeaders(), withCredentials: true
     }).pipe(
         catchError(this.handleError),
@@ -123,7 +132,7 @@ deleteProduct(productId: number): Observable<any> {
 }
 
 getCarts(): Observable<any> {
-    return this.http.get(`${this.apiUrl}api/carts`, {
+    return this.http.get(`${this.apiUrl}carts`, {
         headers: this.getHeaders(), withCredentials: true
     }).pipe(
         catchError(this.handleError),
@@ -139,7 +148,7 @@ createCart(productId: number, quantity: number, size: string = 'M', pickupDate?:
         data.pickup_date = pickupDate;
     }
     
-    return this.http.post(`${this.apiUrl}api/carts-create`, data, {
+    return this.http.post(`${this.apiUrl}carts-create`, data, {
         headers: this.getHeaders(), withCredentials: true,
         reportProgress: true,
         observe: 'events'
@@ -152,7 +161,7 @@ createCart(productId: number, quantity: number, size: string = 'M', pickupDate?:
 updateCart(cartId: number, cart: Cart): Observable<any> {
     // Include the cart ID in the request body as the server expects
     const cartData = { ...cart, id: cartId };
-    return this.http.post(`${this.apiUrl}api/carts-update`, cartData, {
+    return this.http.post(`${this.apiUrl}carts-update`, cartData, {
         headers: this.getHeaders(), withCredentials: true,
         reportProgress: true,
         observe: 'events'
@@ -163,7 +172,7 @@ updateCart(cartId: number, cart: Cart): Observable<any> {
 }
 
 deleteCart(cartId: number): Observable<any> {
-    return this.http.delete(`${this.apiUrl}api/carts-delete/${cartId}`, {
+    return this.http.delete(`${this.apiUrl}carts-delete/${cartId}`, {
         headers: this.getHeaders(), withCredentials: true
     }).pipe(
         catchError(this.handleError),
@@ -172,28 +181,28 @@ deleteCart(cartId: number): Observable<any> {
 }
 
 getUnreadMessages(): Observable<any> {
-    return this.http.post(`${this.apiUrl}api/messages-unread`, {}, {
+    return this.http.post(`${this.apiUrl}messages-unread`, {}, {
         headers: this.getHeaders(),
         withCredentials: true
     });
 }
 
 getUserPostedProducts(): Observable<any> {
-    return this.http.get(`${this.apiUrl}api/products`, {
+    return this.http.get(`${this.apiUrl}products`, {
         headers: this.getHeaders(),
         withCredentials: true
     });
 }
 
 getOrders(): Observable<any> {
-    return this.http.get(`${this.apiUrl}api/orders`, {
+    return this.http.get(`${this.apiUrl}orders`, {
         headers: this.getHeaders(),
         withCredentials: true
     });
 }
 
 createOrders(orders: any[]): Observable<any> {
-    return this.http.post(`${this.apiUrl}api/orders`, orders, {
+    return this.http.post(`${this.apiUrl}orders`, orders, {
         headers: this.getHeaders(),
         withCredentials: true
     });
@@ -202,7 +211,7 @@ createOrders(orders: any[]): Observable<any> {
 // Get orders for the current user (as seller)
 getMyOrders(): Observable<any> {
   const userEmail = localStorage.getItem('user_email');
-  return this.http.get(`${this.apiUrl}api/orders?user=${userEmail}`, {
+  return this.http.get(`${this.apiUrl}orders?user=${userEmail}`, {
     headers: this.getHeaders(),
     withCredentials: true
   });
@@ -211,7 +220,7 @@ getMyOrders(): Observable<any> {
 // Get orders made by the current user (as buyer)
 getMyPurchases(): Observable<any> {
   const userEmail = localStorage.getItem('user_email');
-  return this.http.get(`${this.apiUrl}api/orders?user=${userEmail}`, {
+  return this.http.get(`${this.apiUrl}orders?user=${userEmail}`, {
     headers: this.getHeaders(),
     withCredentials: true
   });
@@ -219,7 +228,7 @@ getMyPurchases(): Observable<any> {
 
 // Update order status (approve/decline)
 updateOrderStatus(orderId: number, status: string): Observable<any> {
-  return this.http.put(`${this.apiUrl}/orders/${orderId}/status`, 
+  return this.http.put(`${this.apiUrl}orders/${orderId}/status`, 
     { status }, 
     { headers: this.getHeaders() }
   );
@@ -227,7 +236,7 @@ updateOrderStatus(orderId: number, status: string): Observable<any> {
 
 // Create order (when user places an order)
 createOrder(productId: number, quantity: number, size: string = 'M'): Observable<any> {
-  return this.http.post(`${this.apiUrl}/orders`, 
+  return this.http.post(`${this.apiUrl}orders`, 
     { product_id: productId, quantity, size }, 
     { headers: this.getHeaders() }
   );
@@ -241,7 +250,7 @@ confirmOrderPickup(orderId: number, userEmail: string, token: string, orNumber?:
   });
 
   return this.http.post(
-    `${this.apiUrl}api/orders`,
+    `${this.apiUrl}orders`,
     {
       action: 'confirm-pickup',
       orderId: orderId,
@@ -250,6 +259,41 @@ confirmOrderPickup(orderId: number, userEmail: string, token: string, orNumber?:
     },
     { headers: headers, withCredentials: true }
   );
+}
+
+// Rating Methods
+submitRating(orderId: number, productId: number, rating: number, review?: string): Observable<any> {
+  return this.http.post(`${this.apiUrl}ratings`, {
+    orderId: orderId,
+    productId: productId,
+    rating: rating,
+    review: review || ''
+  }, { headers: this.getHeaders(), withCredentials: true })
+    .pipe(catchError(this.handleError));
+}
+
+getRatingsByProduct(productId: number): Observable<any> {
+  return this.http.get(`${this.apiUrl}ratings/product/${productId}`, {
+    headers: this.getHeaders(), withCredentials: true
+  }).pipe(catchError(this.handleError));
+}
+
+getRatingsByOrder(orderId: number): Observable<any> {
+  return this.http.get(`${this.apiUrl}ratings/order/${orderId}`, {
+    headers: this.getHeaders(), withCredentials: true
+  }).pipe(catchError(this.handleError));
+}
+
+getAllRatings(): Observable<any> {
+  return this.http.get(`${this.apiUrl}ratings`, {
+    headers: this.getHeaders(), withCredentials: true
+  }).pipe(catchError(this.handleError));
+}
+
+getProductRatingSummary(productId: number): Observable<any> {
+  return this.http.get(`${this.apiUrl}ratings/summary/${productId}`, {
+    headers: this.getHeaders(), withCredentials: true
+  }).pipe(catchError(this.handleError));
 }
 
     private handleError(error: HttpErrorResponse) {

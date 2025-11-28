@@ -7,6 +7,7 @@ import { Cart } from '../models/cart.models';
 import { AuthService } from '../services/auth.service';
 import { Router, ActivatedRoute } from '@angular/router';
 import Swal from 'sweetalert2';
+import { environment } from '../../environments/environment';
 
 @Component({
   selector: 'app-cart',
@@ -19,7 +20,7 @@ export class CartComponent implements OnInit {
   products: Product[] | undefined;
   allProducts: Product[] | undefined;
   productForm: FormGroup = new FormGroup({});
-  baseUrl: string = 'http://localhost:3001/e-comm-images/';
+  baseUrl: string = environment.imageBaseUrl;
   
 
   updateMode = false;

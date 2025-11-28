@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { isPlatformBrowser } from '@angular/common';
 import { Router } from '@angular/router';
+import { environment } from '../../environments/environment';
 
 @Injectable({
     providedIn: 'root'
@@ -15,17 +16,14 @@ export class AuthService {
             'Authorization': `Bearer ${this.getToken()}`
         });
         
-        return this.http.get(`${this.apiUrl}api/check_login_status`, { 
+        return this.http.get(`${this.apiUrl}check_login_status`, { 
             headers: headers, 
             withCredentials: true 
         });
     }
-    // for lolcalhost
-    // apiUrl = 'http://localhost/E-comms/ecomm/e-comm/ecomm_api/Router.php?request=';
-    // for hostinger
-    // apiUrl = 'https://api.localfit.store/ecomm_api/Router.php?request=';
-    private apiUrl = 'http://localhost:3001/';
-     
+
+    private apiUrl = environment.apiUrl;
+
     private token: string = '';
     private userId: number | undefined;
 
@@ -63,7 +61,7 @@ export class AuthService {
 
         const data = { email, password };
 
-        return this.http.post(`${this.apiUrl}api/login`, data, { headers: headers, withCredentials: true });
+        return this.http.post(`${this.apiUrl}login`, data, { headers: headers, withCredentials: true });
     }
 
     register(name: string, email: string, cellphone: string, password: string): Observable<any> {
@@ -73,11 +71,11 @@ export class AuthService {
 
         const data = { name, email, cellphone, password };
 
-        return this.http.post(`${this.apiUrl}api/register`, data, { headers: headers, withCredentials: true });
+        return this.http.post(`${this.apiUrl}register`, data, { headers: headers, withCredentials: true });
     }
 
     logout(): Observable<any> {
-        return this.http.post(`${this.apiUrl}api/logout`, {}, { withCredentials: true }).pipe(
+        return this.http.post(`${this.apiUrl}logout`, {}, { withCredentials: true }).pipe(
             tap(() => {
                 if (isPlatformBrowser(this.platformId)) {
                     localStorage.removeItem('token');

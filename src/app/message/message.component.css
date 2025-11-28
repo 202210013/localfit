@@ -608,6 +608,8 @@
     flex-direction: column;
     background: rgba(249, 250, 251, 0.5);
     position: relative;
+    height: 100%;
+    overflow: hidden;
 }
 
 /* Chat Header */
@@ -616,6 +618,7 @@
     background: rgba(255, 255, 255, 0.95);
     border-bottom: 1px solid rgba(120, 0, 1, 0.08);
     backdrop-filter: blur(10px);
+    flex-shrink: 0;
 }
 
 .chat-header-content {
@@ -723,6 +726,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    min-height: 0;
 }
 
 .messages-wrapper {
@@ -732,6 +736,7 @@
     display: flex;
     flex-direction: column;
     gap: 16px;
+    min-height: 0;
 }
 
 .message-bubble {
@@ -949,6 +954,7 @@
     background: rgba(255, 255, 255, 0.95);
     border-top: 1px solid rgba(120, 0, 1, 0.08);
     backdrop-filter: blur(10px);
+    flex-shrink: 0;
 }
 
 .message-form {
