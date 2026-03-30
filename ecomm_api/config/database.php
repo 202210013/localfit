@@ -3,9 +3,14 @@ date_default_timezone_set("Asia/Manila");
 set_time_limit(1000);
 
 define("SERVER", "localhost");
-define("DATABASE", "u385622194_ecomms_db");
-define("USER", "u385622194_ecomms");
-define("PASSWORD", "E-comm1225");
+define("DATABASE", "e-comm");
+define("USER", "root");
+define("PASSWORD", "");
+
+// define("SERVER", "localhost");
+// define("DATABASE", "u385622194_ecomms_db");
+// define("USER", "u385622194_ecomms");
+// define("PASSWORD", "E-comm1225");
 define("DRIVER", "mysql");
 
 class Connection
