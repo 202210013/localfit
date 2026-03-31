@@ -5,8 +5,9 @@ export const environment = {
   // socketUrl: 'https://api.localfit.store'
 
 // Localhost URLs (use these for local development):
-  apiUrl: 'http://localhost/localfit/ecomm_api/',
-  imageBaseUrl: 'http://localhost/localfit/ecomm-images/',
+// apiUrl: 'https://localhost/localfit-Copy/ecomm_api/',
+  apiUrl: 'http://localhost:8080/',
+  imageBaseUrl: 'http://localhost/localfit-Copy/ecomm-images/',
   socketUrl: 'https://localfit.onrender.com'
 
 
