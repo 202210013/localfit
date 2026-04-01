@@ -764,7 +764,22 @@
           <ng-container *ngFor="let entry of filteredInventory">
             <tr *ngFor="let row of entry.sizes">
               <td class="product-image">
-                <img [src]="getImageUrl(entry.product.image)" [alt]="entry.product.name" class="inventory-product-img" (error)="onImageError($event)">
+                <div class="inventory-image-wrapper">
+                  <img
+                    [src]="getImageUrl(entry.product.image)"
+                    [alt]="entry.product.name"
+                    class="inventory-product-img"
+                    (error)="onImageError($event)"
+                    (click)="openInventoryImagePreview(entry.product.image, entry.product.name)">
+
+                  <div class="inventory-image-hover-preview" aria-hidden="true">
+                    <img
+                      [src]="getImageUrl(entry.product.image)"
+                      [alt]="entry.product.name"
+                      class="inventory-product-img-large"
+                      (error)="onImageError($event)">
+                  </div>
+                </div>
               </td>
               <td class="product-name">
                 <i class="fa-solid fa-box"></i>
@@ -811,6 +826,25 @@
           Clear Search
         </button>
       </div>
+    </div>
+  </div>
+
+  <!-- Inventory Image Preview Modal -->
+  <div *ngIf="showInventoryImagePreview" class="modal-overlay" (click)="closeInventoryImagePreview()">
+    <div class="modal-content inventory-image-preview-modal" (click)="$event.stopPropagation()">
+      <button class="close-btn" (click)="closeInventoryImagePreview()" aria-label="Close image preview">
+        <i class="fa-solid fa-times"></i>
+      </button>
+
+      <img
+        [src]="inventoryImagePreviewUrl"
+        [alt]="inventoryImagePreviewName || 'Product image preview'"
+        class="inventory-image-preview-modal-img"
+        (error)="onImageError($event)">
+
+      <p class="inventory-image-preview-title" *ngIf="inventoryImagePreviewName">
+        {{ inventoryImagePreviewName }}
+      </p>
     </div>
   </div>
 

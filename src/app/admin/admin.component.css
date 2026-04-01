@@ -7004,6 +7004,7 @@ span.approved {
   vertical-align: middle;
   font-size: 0.95rem;
   color: #495057;
+  overflow: visible;
 }
 
 /* Fixed column widths - All stat columns same width as size */
@@ -7051,6 +7052,8 @@ span.approved {
 .inventory-table .product-image {
   width: 100px;
   padding: 10px;
+  position: relative;
+  overflow: visible;
 }
 
 .inventory-table .inventory-product-img {
@@ -7061,12 +7064,72 @@ span.approved {
   box-shadow: 0 4px 15px rgba(0,0,0,0.1);
   transition: all 0.3s ease;
   border: 2px solid #f1f3f5;
+  cursor: zoom-in;
 }
 
 .inventory-table tbody tr:hover .inventory-product-img {
   transform: scale(1.1);
   box-shadow: 0 6px 20px rgba(233, 69, 96, 0.3);
   border-color: #e94560;
+}
+
+.inventory-table .inventory-image-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.inventory-table .inventory-image-hover-preview {
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 30;
+  background: #fff;
+  border: 2px solid #e94560;
+  border-radius: 14px;
+  box-shadow: 0 14px 35px rgba(0, 0, 0, 0.25);
+  padding: 6px;
+  transition: opacity 0.2s ease;
+}
+
+.inventory-table .inventory-image-wrapper:hover .inventory-image-hover-preview {
+  opacity: 1;
+}
+
+.inventory-table .inventory-image-wrapper:focus-within .inventory-image-hover-preview {
+  opacity: 1;
+}
+
+.inventory-table .inventory-product-img-large {
+  width: 220px;
+  height: 220px;
+  object-fit: cover;
+  border-radius: 10px;
+  display: block;
+}
+
+.inventory-image-preview-modal {
+  max-width: 520px;
+  width: min(92vw, 520px);
+  text-align: center;
+  padding: 20px;
+}
+
+.inventory-image-preview-modal-img {
+  width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  border-radius: 12px;
+}
+
+.inventory-image-preview-title {
+  margin: 12px 0 0;
+  font-weight: 700;
+  color: #1f2937;
 }
 
 .inventory-table .product-name {
@@ -7730,6 +7793,10 @@ span.approved {
     height: 100px;
     border-radius: 15px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+  }
+
+  .inventory-table .inventory-image-hover-preview {
+    display: none;
   }
 
   .inventory-table tbody tr:hover .inventory-product-img {

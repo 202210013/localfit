@@ -186,6 +186,9 @@ export class AdminComponent implements OnInit, OnDestroy {
   selectedInventoryItem: any = null;
   addStockQuantity: number = 0;
   showOnlyLowStock: boolean = false;
+  showInventoryImagePreview: boolean = false;
+  inventoryImagePreviewUrl: string = '';
+  inventoryImagePreviewName: string = '';
   
   // Date filter for analytics
   dateFilter: 'today' | 'week' | 'month' | 'year' | 'all' = 'month';
@@ -3516,6 +3519,18 @@ private fetchYourProductsAndOrders(userEmail: string) {
     
     // Prevent further error events on this element
     event.target.onerror = null;
+  }
+
+  openInventoryImagePreview(image: string, productName: string) {
+    this.inventoryImagePreviewUrl = this.getImageUrl(image);
+    this.inventoryImagePreviewName = productName || 'Product image';
+    this.showInventoryImagePreview = true;
+  }
+
+  closeInventoryImagePreview() {
+    this.showInventoryImagePreview = false;
+    this.inventoryImagePreviewUrl = '';
+    this.inventoryImagePreviewName = '';
   }
 
   // Get order total (price * quantity)
