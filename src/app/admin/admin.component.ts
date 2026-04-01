@@ -3692,6 +3692,7 @@ private fetchYourProductsAndOrders(userEmail: string) {
         // Refresh orders and analytics to reflect size change
         this.fetchOrders();
         this.calculateAnalytics();
+        this.fetchInventory();
       },
       error: (err) => {
         console.error('❌ COMPLETION REMARKS ERROR:', err);

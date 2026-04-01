@@ -305,7 +305,7 @@ public function updateCompletionRemarks($orderId, $remarks, $size = null) {
     }
     
     // Check if order exists and is completed
-    $checkStmt = $this->db->prepare("SELECT status, size as current_size FROM orders WHERE id = ?");
+    $checkStmt = $this->db->prepare("SELECT status, size as current_size, product, quantity FROM orders WHERE id = ?");
     $checkStmt->execute([$orderId]);
     $order = $checkStmt->fetch(PDO::FETCH_ASSOC);
     
@@ -327,29 +327,67 @@ public function updateCompletionRemarks($orderId, $remarks, $size = null) {
     error_log("Current size in DB: " . $order['current_size']);
     error_log("New size to set: $size");
     
-    // Update completion remarks and/or size
-    if ($size && trim($size) !== '') {
-        $updateStmt = $this->db->prepare("UPDATE orders SET completion_remarks = ?, size = ? WHERE id = ?");
-        $params = [$remarks ?: '', $size, $orderId];
-        error_log("Executing SQL with params: " . json_encode($params));
-        $updateResult = $updateStmt->execute($params);
-        error_log("✅ Order $orderId completion remarks and size updated successfully to: $size");
-    } else {
-        $updateStmt = $this->db->prepare("UPDATE orders SET completion_remarks = ? WHERE id = ?");
-        $updateResult = $updateStmt->execute([$remarks ?: '', $orderId]);
-        error_log("Order $orderId completion remarks updated successfully");
-    }
-    
-    if ($updateResult) {
-        return json_encode([
-            "success" => true, 
-            "message" => "Completion remarks updated successfully"
-        ]);
-    } else {
+    try {
+        $this->db->beginTransaction();
+
+        // Update completion remarks and/or size
+        if ($size && trim($size) !== '') {
+            $newSize = trim($size);
+            $currentSize = $order['current_size'];
+
+            // If admin changes size on a completed order, rebalance product size inventory.
+            if ($currentSize && $newSize !== $currentSize) {
+                $inventoryTransfer = $this->transferProductQuantityBetweenSizes(
+                    $order['product'],
+                    $currentSize,
+                    $newSize,
+                    (int)$order['quantity']
+                );
+
+                if (!$inventoryTransfer['success']) {
+                    $this->db->rollBack();
+                    http_response_code(400);
+                    return json_encode([
+                        "success" => false,
+                        "error" => $inventoryTransfer['error']
+                    ]);
+                }
+            }
+
+            $updateStmt = $this->db->prepare("UPDATE orders SET completion_remarks = ?, size = ? WHERE id = ?");
+            $params = [$remarks ?: '', $newSize, $orderId];
+            error_log("Executing SQL with params: " . json_encode($params));
+            $updateResult = $updateStmt->execute($params);
+            error_log("✅ Order $orderId completion remarks and size updated successfully to: $newSize");
+        } else {
+            $updateStmt = $this->db->prepare("UPDATE orders SET completion_remarks = ? WHERE id = ?");
+            $updateResult = $updateStmt->execute([$remarks ?: '', $orderId]);
+            error_log("Order $orderId completion remarks updated successfully");
+        }
+
+        if ($updateResult) {
+            $this->db->commit();
+            return json_encode([
+                "success" => true,
+                "message" => "Completion remarks updated successfully"
+            ]);
+        }
+
+        $this->db->rollBack();
         error_log("Failed to update completion remarks for order $orderId");
         http_response_code(500);
         return json_encode([
-            "success" => false, 
+            "success" => false,
+            "error" => "Failed to update completion remarks"
+        ]);
+    } catch (Exception $e) {
+        if ($this->db->inTransaction()) {
+            $this->db->rollBack();
+        }
+        error_log("Error updating completion remarks: " . $e->getMessage());
+        http_response_code(500);
+        return json_encode([
+            "success" => false,
             "error" => "Failed to update completion remarks"
         ]);
     }
@@ -480,5 +518,53 @@ private function getFutureDate($days) {
     $date = new DateTime();
     $date->modify("+$days days");
     return $date->format('Y-m-d');
+}
+
+private function transferProductQuantityBetweenSizes($productName, $fromSize, $toSize, $quantity) {
+    if (!$fromSize || !$toSize || $fromSize === $toSize || $quantity <= 0) {
+        return ["success" => true];
+    }
+
+    $productStmt = $this->db->prepare("SELECT size_quantities FROM products WHERE name = ?");
+    $productStmt->execute([$productName]);
+    $product = $productStmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$product || empty($product['size_quantities'])) {
+        return ["success" => false, "error" => "Product inventory not found for size transfer"];
+    }
+
+    $sizeQuantities = json_decode($product['size_quantities'], true);
+    if (!is_array($sizeQuantities)) {
+        return ["success" => false, "error" => "Invalid product size inventory format"];
+    }
+
+    if (!isset($sizeQuantities[$fromSize])) {
+        $sizeQuantities[$fromSize] = 0;
+    }
+    if (!isset($sizeQuantities[$toSize])) {
+        $sizeQuantities[$toSize] = 0;
+    }
+
+    if ($sizeQuantities[$toSize] < $quantity) {
+        return [
+            "success" => false,
+            "error" => "Insufficient stock for selected size ({$toSize}). Available: {$sizeQuantities[$toSize]}, needed: {$quantity}"
+        ];
+    }
+
+    // Move reserved quantity from old size to the new size for this completed order.
+    $sizeQuantities[$fromSize] += $quantity;
+    $sizeQuantities[$toSize] -= $quantity;
+
+    $totalQuantity = array_sum($sizeQuantities);
+    $updateStmt = $this->db->prepare("UPDATE products SET size_quantities = ?, quantity = ? WHERE name = ?");
+    $updateStmt->execute([
+        json_encode($sizeQuantities),
+        $totalQuantity,
+        $productName
+    ]);
+
+    error_log("Transferred {$quantity} stock for {$productName} from {$fromSize} to {$toSize}");
+    return ["success" => true];
 }
 }

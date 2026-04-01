@@ -57,6 +57,53 @@ class OrderService extends BaseService {
     }
   }
 
+  async transferProductQuantityForSizeChange(productName, oldSize, newSize, quantity, dbClient = this.db) {
+    const rows = await dbClient.query("SELECT size_quantities FROM products WHERE name = ? LIMIT 1", [productName]);
+    const product = rows[0];
+    if (!product || !product.size_quantities) {
+      return { success: false, error: "Product inventory not found" };
+    }
+
+    let sizeQuantities;
+    try {
+      sizeQuantities = JSON.parse(product.size_quantities);
+    } catch (_e) {
+      sizeQuantities = {};
+    }
+
+    const oldSizeKey = String(oldSize || "").trim();
+    const newSizeKey = String(newSize || "").trim();
+    const qty = Number(quantity || 0);
+
+    if (!Object.prototype.hasOwnProperty.call(sizeQuantities, oldSizeKey)) {
+      sizeQuantities[oldSizeKey] = 0;
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(sizeQuantities, newSizeKey)) {
+      sizeQuantities[newSizeKey] = 0;
+    }
+
+    const newSizeStock = Number(sizeQuantities[newSizeKey] || 0);
+    if (newSizeStock < qty) {
+      return {
+        success: false,
+        error: `Insufficient stock for size ${newSizeKey}. Available: ${newSizeStock}, needed: ${qty}`
+      };
+    }
+
+    sizeQuantities[oldSizeKey] = Number(sizeQuantities[oldSizeKey] || 0) + qty;
+    sizeQuantities[newSizeKey] = Math.max(0, newSizeStock - qty);
+
+    const totalQuantity = Object.values(sizeQuantities).reduce((sum, v) => sum + Number(v || 0), 0);
+    await dbClient.query("UPDATE products SET size_quantities = ?, quantity = ? WHERE name = ?", [
+      JSON.stringify(sizeQuantities),
+      totalQuantity,
+      productName
+    ]);
+
+    return { success: true };
+  }
+
   async createOrders(orders) {
     await this.db.withTransaction(async (tx) => {
       for (const order of orders || []) {
@@ -193,23 +240,43 @@ class OrderService extends BaseService {
       return { success: false, error: "Order ID is required" };
     }
 
-    const rows = await this.db.query("SELECT status FROM orders WHERE id = ?", [orderId]);
-    const order = rows[0];
-    if (!order) {
-      return { success: false, error: "Order not found" };
-    }
+    return this.db.withTransaction(async (tx) => {
+      const rows = await tx.query("SELECT status, size, product, quantity FROM orders WHERE id = ?", [orderId]);
+      const order = rows[0];
+      if (!order) {
+        return { success: false, error: "Order not found" };
+      }
 
-    if (order.status !== "completed") {
-      return { success: false, error: "Only completed orders can have completion remarks" };
-    }
+      if (order.status !== "completed") {
+        return { success: false, error: "Only completed orders can have completion remarks" };
+      }
 
-    if (size && String(size).trim() !== "") {
-      await this.db.query("UPDATE orders SET completion_remarks = ?, size = ? WHERE id = ?", [remarks || "", size, orderId]);
-    } else {
-      await this.db.query("UPDATE orders SET completion_remarks = ? WHERE id = ?", [remarks || "", orderId]);
-    }
+      const newSize = size && String(size).trim() !== "" ? String(size).trim() : null;
+      const currentSize = String(order.size || "").trim();
+      const hasSizeChange = newSize && currentSize !== "" && newSize !== currentSize;
 
-    return { success: true, message: "Completion remarks updated successfully" };
+      if (hasSizeChange) {
+        const transferResult = await this.transferProductQuantityForSizeChange(
+          order.product,
+          currentSize,
+          newSize,
+          order.quantity,
+          tx
+        );
+
+        if (!transferResult.success) {
+          return transferResult;
+        }
+      }
+
+      if (newSize) {
+        await tx.query("UPDATE orders SET completion_remarks = ?, size = ? WHERE id = ?", [remarks || "", newSize, orderId]);
+      } else {
+        await tx.query("UPDATE orders SET completion_remarks = ? WHERE id = ?", [remarks || "", orderId]);
+      }
+
+      return { success: true, message: "Completion remarks updated successfully" };
+    });
   }
 
   async updateOrderStatus(orderId, status, pickupDate = null) {

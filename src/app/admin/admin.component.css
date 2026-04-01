@@ -5854,7 +5854,7 @@ span.approved {
   opacity: 1;
 }
 
-.product-image {
+img.product-image {
   width: 200px;
   height: 200px;
   border-radius: 12px;
@@ -6991,8 +6991,8 @@ span.approved {
 
 .inventory-table tbody tr:hover {
   background: linear-gradient(135deg, #fff5f7 0%, #fff 100%);
-  transform: scale(1.01);
-  box-shadow: 0 4px 15px rgba(233, 69, 96, 0.1);
+  transform: none;
+  box-shadow: inset 0 0 0 1px rgba(233, 69, 96, 0.18);
 }
 
 .inventory-table tbody tr:last-child {
@@ -7050,10 +7050,14 @@ span.approved {
 
 /* Product Image */
 .inventory-table .product-image {
-  width: 100px;
+  width: 120px;
+  min-width: 120px;
+  max-width: 120px;
+  height: auto;
   padding: 10px;
   position: relative;
   overflow: visible;
+  text-align: center;
 }
 
 .inventory-table .inventory-product-img {
@@ -7078,30 +7082,34 @@ span.approved {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  line-height: 0;
 }
 
 .inventory-table .inventory-image-hover-preview {
   position: absolute;
   left: calc(100% + 12px);
-  top: 50%;
-  transform: translateY(-50%);
+  top: 0;
+  transform: translateY(0);
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
-  z-index: 30;
+  z-index: 60;
   background: #fff;
   border: 2px solid #e94560;
   border-radius: 14px;
   box-shadow: 0 14px 35px rgba(0, 0, 0, 0.25);
   padding: 6px;
-  transition: opacity 0.2s ease;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
 }
 
 .inventory-table .inventory-image-wrapper:hover .inventory-image-hover-preview {
   opacity: 1;
+  visibility: visible;
 }
 
 .inventory-table .inventory-image-wrapper:focus-within .inventory-image-hover-preview {
   opacity: 1;
+  visibility: visible;
 }
 
 .inventory-table .inventory-product-img-large {
