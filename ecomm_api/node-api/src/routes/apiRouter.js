@@ -279,25 +279,10 @@ router.post("/ratings", requireAuthentication, asyncHandler(async (req, res) => 
   return sendResult(res, await ratingService.submitRating(orderId, productId, userId, rating, review));
 }));
 
-router.get("/users/:userId/profile", requireAuthentication, asyncHandler(async (req, res) => {
-  const userService = new UserService(db);
-  return sendResult(res, await userService.getUserProfile(req.params.userId));
-}));
-
-router.put("/users/:userId/profile", requireAuthentication, asyncHandler(async (req, res) => {
-  const userService = new UserService(db);
-  return sendResult(res, await userService.updateUserProfile(req.params.userId, req.body || {}));
-}));
-
 router.put("/users/:userId/password", requireAuthentication, asyncHandler(async (req, res) => {
   const userService = new UserService(db);
   const { currentPassword, newPassword } = req.body || {};
   return sendResult(res, await userService.changeUserPassword(req.params.userId, currentPassword, newPassword));
-}));
-
-router.post("/users/:userId/profile-image", requireAuthentication, upload.single("image"), asyncHandler(async (req, res) => {
-  const userService = new UserService(db);
-  return sendResult(res, await userService.uploadProfileImage(req.params.userId, req.file));
 }));
 
 router.put("/orders/:id", requireAuthentication, asyncHandler(async (req, res) => {

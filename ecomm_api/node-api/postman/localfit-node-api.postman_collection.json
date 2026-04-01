@@ -63,26 +63,6 @@
           }
         },
         {
-          "name": "GET /users/:userId/profile",
-          "request": {
-            "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": "{{baseUrl}}/users/{{userId}}/profile"
-          }
-        },
-        {
-          "name": "PUT /users/:userId/profile",
-          "request": {
-            "method": "PUT",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
-            ],
-            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Updated Name\",\n  \"phone\": \"09999999999\",\n  \"address\": \"City\",\n  \"bio\": \"Updated bio\"\n}" },
-            "url": "{{baseUrl}}/users/{{userId}}/profile"
-          }
-        },
-        {
           "name": "PUT /users/:userId/password",
           "request": {
             "method": "PUT",

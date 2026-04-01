@@ -1,7 +1,5 @@
 const bcrypt = require("bcrypt");
 const crypto = require("crypto");
-const fs = require("fs/promises");
-const path = require("path");
 const BaseService = require("./BaseService");
 
 class UserService extends BaseService {
@@ -110,47 +108,6 @@ class UserService extends BaseService {
     return { valid: false, message: "Invalid token." };
   }
 
-  async getUserProfile(userId) {
-    const rows = await this.db.query(
-      "SELECT id, name, email, phone, address, bio, profile_image, created_at, updated_at FROM users WHERE id = ?",
-      [userId]
-    );
-
-    if (!rows[0]) {
-      return { error: "User not found." };
-    }
-
-    return rows[0];
-  }
-
-  async updateUserProfile(userId, data) {
-    const exists = await this.db.query("SELECT id FROM users WHERE id = ?", [userId]);
-    if (!exists[0]) {
-      return { error: "User not found." };
-    }
-
-    const allowedFields = ["name", "email", "phone", "address", "bio", "profile_image"];
-    const updates = [];
-    const values = [];
-
-    for (const field of allowedFields) {
-      if (Object.prototype.hasOwnProperty.call(data || {}, field)) {
-        updates.push(`${field} = ?`);
-        values.push(data[field]);
-      }
-    }
-
-    if (updates.length === 0) {
-      return { error: "No valid fields provided for update." };
-    }
-
-    updates.push("updated_at = NOW()");
-    values.push(userId);
-
-    await this.db.query(`UPDATE users SET ${updates.join(", ")} WHERE id = ?`, values);
-    return this.getUserProfile(userId);
-  }
-
   async changeUserPassword(userId, currentPassword, newPassword) {
     const rows = await this.db.query("SELECT password FROM users WHERE id = ?", [userId]);
     const user = rows[0];
@@ -170,45 +127,6 @@ class UserService extends BaseService {
     return { message: "Password changed successfully." };
   }
 
-  async uploadProfileImage(userId, imageFile) {
-    if (!imageFile) {
-      return { error: "No image uploaded." };
-    }
-
-    const allowed = ["image/jpeg", "image/png", "image/gif"];
-    if (!allowed.includes(imageFile.mimetype)) {
-      return { error: "Invalid file type. Only JPG, PNG, and GIF are allowed." };
-    }
-
-    if (Number(imageFile.size || 0) > 5 * 1024 * 1024) {
-      return { error: "File size too large. Maximum 5MB allowed." };
-    }
-
-    const configured = process.env.PROFILE_UPLOAD_DIR
-      ? process.env.PROFILE_UPLOAD_DIR
-      : path.resolve(__dirname, "../../../../ecomm-images/profile");
-    const uploadDir = path.isAbsolute(configured)
-      ? configured
-      : path.resolve(__dirname, "../../../", configured);
-
-    await fs.mkdir(uploadDir, { recursive: true });
-
-    const ext = path.extname(imageFile.originalname || "").replace(".", "") || "jpg";
-    const fileName = `${Date.now()}_${Math.floor(Math.random() * 1e6)}_profile.${ext}`;
-    const targetPath = path.join(uploadDir, fileName);
-
-    await fs.rename(imageFile.path, targetPath);
-
-    const relativeDir = (process.env.PROFILE_IMAGE_RELATIVE_DIR || "ecomm-images/profile").replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
-    const imagePath = `${relativeDir}/${fileName}`;
-
-    await this.db.query("UPDATE users SET profile_image = ?, updated_at = NOW() WHERE id = ?", [imagePath, userId]);
-
-    return {
-      message: "Profile image uploaded successfully.",
-      imagePath
-    };
-  }
 }
 
 module.exports = UserService;
