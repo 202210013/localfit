@@ -9,5 +9,5 @@ export const environment = {
   // apiUrl: 'https://localhost/localfit-Copy/ecomm_api/',
   apiUrl: 'https://api.localfit.shop/',
   imageBaseUrl: 'https://images.localfit.shop/',
-  socketUrl: 'https://localfit.onrender.com'
+  socketUrl: 'https://socket.localfit.shop'
 };
