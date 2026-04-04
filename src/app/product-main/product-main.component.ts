@@ -18,9 +18,6 @@ import { environment } from '../../environments/environment';
   styleUrls: ['./product-main.component.css'],
 })
 export class ProductsMainComponent implements OnInit {
-  private readonly visitorCounterKey = 'localfit-landing-refresh-visit-count';
-  visitorCount = 0;
-
   products: Product[] | undefined;
   allProducts: Product[] | undefined;
   productForm: FormGroup = new FormGroup({});
@@ -113,15 +110,19 @@ export class ProductsMainComponent implements OnInit {
         event.preventDefault();
         this.deferredPrompt = event;
       });
-
-      this.incrementVisitorCount();
+      
+      // Load visitor counter script
+      this.loadVisitorCounterScript();
     }
   }
 
-  private incrementVisitorCount(): void {
-    const currentValue = Number(localStorage.getItem(this.visitorCounterKey) || '0');
-    this.visitorCount = currentValue + 1;
-    localStorage.setItem(this.visitorCounterKey, String(this.visitorCount));
+  // Load visitor counter script dynamically
+  private loadVisitorCounterScript(): void {
+    const script = document.createElement('script');
+    script.type = 'text/javascript';
+    script.src = 'https://www.counter12.com/ad.js?id=8xZ2A5z2AZCCA7wy';
+    script.async = true;
+    document.body.appendChild(script);
   }
 
   goToCart() {
