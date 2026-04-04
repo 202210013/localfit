@@ -170,10 +170,12 @@
             
             <!-- Website Visit Counter -->
             <div class="visitor-counter">
-                <i class="fa-solid fa-eye counter-icon"></i>
-                <a href='https://www.counter12.com' target="_blank" rel="noopener">
-                    <img src='https://www.counter12.com/img-8xZ2A5z2AZCCA7wy-47.gif' border='0' alt='web counter free'>
-                </a>
+                <div class="counter-pill">
+                    <span class="counter-dot" aria-hidden="true"></span>
+                    <i class="fa-solid fa-eye counter-icon" aria-hidden="true"></i>
+                    <strong class="counter-value">{{ visitorCount | number }}</strong>
+                </div>
+                <span class="counter-hint">Increments each time this page is refreshed on this browser.</span>
             </div>
             
             <div class="footer-copyright">
