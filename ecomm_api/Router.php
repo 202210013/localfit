@@ -276,6 +276,13 @@ switch ($method) {
                 echo $messageService->saveMessage($data);
             break;
 
+            case 'messages-read':
+                $data = json_decode(file_get_contents('php://input'), true);
+                $sender = isset($data['sender']) ? trim(strtolower($data['sender'])) : '';
+                $recipient = isset($data['recipient']) ? trim(strtolower($data['recipient'])) : '';
+                echo $messageService->markMessagesAsRead($sender, $recipient);
+            break;
+
             case 'orders':
                 $data = json_decode(file_get_contents('php://input'), true);
                 

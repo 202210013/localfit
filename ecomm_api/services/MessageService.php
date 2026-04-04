@@ -8,7 +8,7 @@ class MessageService {
 
     public function getMessagesBetween($user1, $user2) {
         $stmt = $this->db->prepare(
-            "SELECT sender, recipient, content, timestamp FROM messages 
+            "SELECT sender, recipient, content, timestamp, is_read FROM messages 
              WHERE (sender = ? AND recipient = ?) OR (sender = ? AND recipient = ?)
              ORDER BY id ASC"
         );
@@ -40,5 +40,26 @@ class MessageService {
         $stmt->execute([$recipient]);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
         return json_encode($result);
+    }
+
+    public function markMessagesAsRead($sender, $recipient) {
+        if (!$sender || !$recipient) {
+            http_response_code(400);
+            return json_encode(["error" => "sender and recipient are required"]);
+        }
+
+        $stmt = $this->db->prepare(
+            "UPDATE messages SET is_read = 1 WHERE sender = ? AND recipient = ? AND is_read = 0"
+        );
+
+        if ($stmt->execute([$sender, $recipient])) {
+            return json_encode([
+                "success" => true,
+                "updated" => $stmt->rowCount()
+            ]);
+        }
+
+        http_response_code(500);
+        return json_encode(["error" => "Failed to update read status"]);
     }
 }

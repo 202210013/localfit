@@ -95,7 +95,10 @@
               </div>
               <div class="user-info">
                 <div class="user-details">
-                  <span class="user-name">{{ user.name }}</span>
+                  <div class="user-name-row">
+                    <span class="user-name">{{ user.name }}</span>
+                    <span class="name-unread-indicator" *ngIf="getUnreadCount(user.email) > 0" aria-label="Unread messages"></span>
+                  </div>
                   <span class="user-status">{{ user.email }}</span>
                 </div>
                 <div class="message-preview">
@@ -104,6 +107,7 @@
                 </div>
               </div>
               <div class="user-actions">
+                <span class="right-unread-indicator" *ngIf="getUnreadCount(user.email) > 0" aria-label="Unread conversation"></span>
                 <span class="unread-badge" *ngIf="getUnreadCount(user.email) > 0">{{ getUnreadCount(user.email) }}</span>
                 <i class="fa-solid fa-chevron-right action-arrow"></i>
               </div>

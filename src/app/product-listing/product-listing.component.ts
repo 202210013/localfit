@@ -728,13 +728,27 @@ logout() {
       conversations.forEach((conversation) => {
         const otherUser = this.normalizeEmail(conversation.email);
         const lastRead = readState[otherUser] || 0;
+        const seenUnreadKeys = new Set<string>();
 
         conversation.messages.forEach((message: any) => {
           const sender = this.normalizeEmail(message.sender);
           const recipient = this.normalizeEmail(message.recipient);
           if (recipient === currentUser && sender === otherUser) {
+            const readFlag = Number(message.is_read);
+            const hasReadFlag = Number.isFinite(readFlag);
+            const isUnreadByFlag = readFlag !== 1;
             const messageTime = this.parseMessageTimeMs(message.timestamp);
-            if (!lastRead || messageTime > lastRead) {
+            const isUnreadByTimestamp = !lastRead || messageTime > lastRead;
+            const messageKey = [
+              sender,
+              recipient,
+              message.content || '',
+              messageTime,
+              message.clientId || ''
+            ].join('|');
+
+            if (((hasReadFlag && isUnreadByFlag) || (!hasReadFlag && isUnreadByTimestamp)) && !seenUnreadKeys.has(messageKey)) {
+              seenUnreadKeys.add(messageKey);
               unread += 1;
             }
           }

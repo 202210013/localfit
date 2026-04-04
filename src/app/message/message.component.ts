@@ -14,6 +14,7 @@ interface Message {
   content: string;
   timestamp?: string | Date;
   clientId?: string;
+  is_read?: number;
 }
 
 interface User {
@@ -77,6 +78,10 @@ export class MessageComponent implements OnInit, OnDestroy {
     return `message_last_read_${context}_${this.userName}`;
   }
 
+  private normalizeEmail(email: string | null | undefined): string {
+    return (email || '').trim().toLowerCase();
+  }
+
   private loadReadState(): void {
     try {
       const raw = sessionStorage.getItem(this.getReadStateStorageKey());
@@ -99,6 +104,24 @@ export class MessageComponent implements OnInit, OnDestroy {
     return Number.isFinite(timeMs) ? timeMs : 0;
   }
 
+  private getMessageIdentityKey(message: Message): string {
+    if (message.clientId) {
+      return `client:${message.clientId}`;
+    }
+
+    return [
+      message.sender || '',
+      message.recipient || '',
+      message.content || '',
+      this.getMessageTimeMs(message)
+    ].join('|');
+  }
+
+  private getReadFlag(value: unknown): number | null {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
   private isSameMessage(a: Message, b: Message): boolean {
     if (a.clientId && b.clientId) {
       return a.clientId === b.clientId;
@@ -110,27 +133,40 @@ export class MessageComponent implements OnInit, OnDestroy {
       this.getMessageTimeMs(a) === this.getMessageTimeMs(b);
   }
 
-  private addMessageIfMissing(message: Message): void {
-    const exists = this.messages.some((existing) => this.isSameMessage(existing, message));
-    if (!exists) {
+  private addMessageIfMissing(message: Message): boolean {
+    const existingIndex = this.messages.findIndex((existing) => this.isSameMessage(existing, message));
+    if (existingIndex === -1) {
       this.messages = [...this.messages, message];
+      return true;
     }
+
+    // Keep local read flag in sync when socket/API sends an updated status.
+    this.messages[existingIndex] = { ...this.messages[existingIndex], is_read: message.is_read };
+    return false;
   }
 
   private refreshUnreadCounts(): void {
     const nextUnread: { [email: string]: number } = {};
+    const seenUnreadKeys = new Set<string>();
+    const currentUserEmail = this.normalizeEmail(this.userName);
+    const openConversationEmail = this.normalizeEmail(this.selectedRecipient?.email || '');
 
     this.messages.forEach((message) => {
-      if (message.recipient !== this.userName || message.sender === this.userName) {
+      const recipientEmail = this.normalizeEmail(message.recipient);
+      const senderEmail = this.normalizeEmail(message.sender);
+
+      if (recipientEmail !== currentUserEmail || senderEmail === currentUserEmail) {
         return;
       }
 
-      const sender = message.sender;
-      const messageTime = this.getMessageTimeMs(message);
-      const lastRead = this.lastReadByUser[sender] || 0;
-      const isCurrentOpenConversation = this.selectedRecipient?.email === sender;
+      const sender = senderEmail;
+      const isCurrentOpenConversation = openConversationEmail === sender;
+      const readFlag = this.getReadFlag(message.is_read);
+      const isUnread = readFlag === null ? true : readFlag !== 1;
+      const messageKey = this.getMessageIdentityKey(message);
 
-      if (!isCurrentOpenConversation && messageTime > lastRead) {
+      if (!isCurrentOpenConversation && isUnread && !seenUnreadKeys.has(messageKey)) {
+        seenUnreadKeys.add(messageKey);
         nextUnread[sender] = (nextUnread[sender] || 0) + 1;
       }
     });
@@ -139,11 +175,30 @@ export class MessageComponent implements OnInit, OnDestroy {
   }
 
   private markConversationAsRead(userEmail: string): void {
-    this.lastReadByUser[userEmail] = Date.now();
-    this.saveReadState();
-    this.refreshUnreadCounts();
-  }
+    const normalizedUserEmail = this.normalizeEmail(userEmail);
+    const currentUserEmail = this.normalizeEmail(this.userName);
 
+    this.lastReadByUser[normalizedUserEmail] = Date.now();
+    this.saveReadState();
+
+    this.messages = this.messages.map((message) => {
+      const readFlag = this.getReadFlag(message.is_read);
+      if (this.normalizeEmail(message.sender) === normalizedUserEmail &&
+          this.normalizeEmail(message.recipient) === currentUserEmail &&
+          readFlag !== 1) {
+        return { ...message, is_read: 1 };
+      }
+      return message;
+    });
+
+    this.refreshUnreadCounts();
+
+    // Save to database so it persists after logout/refresh
+    this.http.post(`${environment.apiUrl}messages-read`, {
+      sender: normalizedUserEmail,
+      recipient: currentUserEmail
+    }).subscribe();
+  }
   private ensureUserExists(email: string): void {
     if (!email || email === this.userName) {
       return;
@@ -157,7 +212,7 @@ export class MessageComponent implements OnInit, OnDestroy {
   }
 
   getUnreadCount(userEmail: string): number {
-    return this.unreadCounts[userEmail] || 0;
+    return this.unreadCounts[this.normalizeEmail(userEmail)] || 0;
   }
 
   getTotalUnreadCount(): number {
@@ -194,7 +249,7 @@ export class MessageComponent implements OnInit, OnDestroy {
     });
     this.socket.on('receive-message', (msg: Message) => {
       this.ngZone.run(() => {
-        this.addMessageIfMissing(msg);
+        const isNewMessage = this.addMessageIfMissing(msg);
 
         if (msg.sender === this.userName) {
           this.ensureUserExists(msg.recipient);
@@ -204,12 +259,19 @@ export class MessageComponent implements OnInit, OnDestroy {
         }
 
         // Unread indicator: incoming message from another user to me while that chat is not open.
-        if (msg.recipient === this.userName && msg.sender !== this.userName) {
-          const isOpenConversation = this.selectedRecipient?.email === msg.sender;
+        const msgRecipient = this.normalizeEmail(msg.recipient);
+        const msgSender = this.normalizeEmail(msg.sender);
+        const currentUserEmail = this.normalizeEmail(this.userName);
+        const openConversationEmail = this.normalizeEmail(this.selectedRecipient?.email || '');
+
+        if (msgRecipient === currentUserEmail && msgSender !== currentUserEmail) {
+          const isOpenConversation = openConversationEmail === msgSender;
           if (isOpenConversation) {
+            msg.is_read = 1;
             this.markConversationAsRead(msg.sender);
-          } else {
-            this.unreadCounts[msg.sender] = (this.unreadCounts[msg.sender] || 0) + 1;
+          } else if (isNewMessage) {
+            msg.is_read = 0;
+            this.unreadCounts[msgSender] = (this.unreadCounts[msgSender] || 0) + 1;
           }
         }
 
@@ -313,7 +375,8 @@ export class MessageComponent implements OnInit, OnDestroy {
       sender: this.userName,
       recipient: this.selectedRecipient.email,
       content: this.messageForm.value.content,
-      timestamp: new Date(nowGMT8) // Add current timestamp in GMT+8
+      timestamp: new Date(nowGMT8),
+      is_read: 1
     };
     // Optimistically render the message instantly without waiting for socket echo.
     this.addMessageIfMissing(msg);
