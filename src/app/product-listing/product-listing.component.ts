@@ -702,8 +702,6 @@ logout() {
       return;
     }
 
-    const readState = this.getUserReadState();
-
     this.http.get<any[]>(`${environment.apiUrl}all-users?currentUser=${encodeURIComponent(currentUser)}`).pipe(
       catchError(() => of([] as any[])),
       map((users: any[]) => users || []),
@@ -727,7 +725,6 @@ logout() {
 
       conversations.forEach((conversation) => {
         const otherUser = this.normalizeEmail(conversation.email);
-        const lastRead = readState[otherUser] || 0;
         const seenUnreadKeys = new Set<string>();
 
         conversation.messages.forEach((message: any) => {
@@ -736,9 +733,8 @@ logout() {
           if (recipient === currentUser && sender === otherUser) {
             const readFlag = Number(message.is_read);
             const hasReadFlag = Number.isFinite(readFlag);
-            const isUnreadByFlag = readFlag !== 1;
+            const isUnread = hasReadFlag ? readFlag !== 1 : true;
             const messageTime = this.parseMessageTimeMs(message.timestamp);
-            const isUnreadByTimestamp = !lastRead || messageTime > lastRead;
             const messageKey = [
               sender,
               recipient,
@@ -747,7 +743,7 @@ logout() {
               message.clientId || ''
             ].join('|');
 
-            if (((hasReadFlag && isUnreadByFlag) || (!hasReadFlag && isUnreadByTimestamp)) && !seenUnreadKeys.has(messageKey)) {
+            if (isUnread && !seenUnreadKeys.has(messageKey)) {
               seenUnreadKeys.add(messageKey);
               unread += 1;
             }

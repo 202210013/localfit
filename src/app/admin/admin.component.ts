@@ -307,8 +307,6 @@ export class AdminComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const readState = this.getAdminReadState();
-
     this.http.get<any[]>(`${this.apiUrl}all-users?currentUser=${encodeURIComponent(adminEmail)}`).pipe(
       catchError(() => of([] as any[])),
       map((users: any[]) => users || []),
@@ -332,7 +330,6 @@ export class AdminComponent implements OnInit, OnDestroy {
 
       conversations.forEach((conversation) => {
         const otherUser = this.normalizeEmail(conversation.email);
-        const lastRead = readState[otherUser] || 0;
         const seenUnreadKeys = new Set<string>();
 
         conversation.messages.forEach((message: any) => {
@@ -341,9 +338,8 @@ export class AdminComponent implements OnInit, OnDestroy {
           if (recipient === adminEmail && sender === otherUser) {
             const readFlag = Number(message.is_read);
             const hasReadFlag = Number.isFinite(readFlag);
-            const isUnreadByFlag = readFlag !== 1;
+            const isUnread = hasReadFlag ? readFlag !== 1 : true;
             const messageTime = this.parseMessageTimeMs(message.timestamp);
-            const isUnreadByTimestamp = !lastRead || messageTime > lastRead;
 
             const messageKey = [
               sender,
@@ -353,7 +349,7 @@ export class AdminComponent implements OnInit, OnDestroy {
               message.clientId || ''
             ].join('|');
 
-            if (((hasReadFlag && isUnreadByFlag) || (!hasReadFlag && isUnreadByTimestamp)) && !seenUnreadKeys.has(messageKey)) {
+            if (isUnread && !seenUnreadKeys.has(messageKey)) {
               seenUnreadKeys.add(messageKey);
               unread += 1;
             }
