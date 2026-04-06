@@ -224,6 +224,12 @@ router.post("/send-message", asyncHandler(async (req, res) => {
   return sendResult(res, await messageService.saveMessage(req.body));
 }));
 
+router.post("/messages-read", asyncHandler(async (req, res) => {
+  const data = req.body || {};
+  const messageService = new MessageService(db);
+  return sendResult(res, await messageService.markMessagesAsRead(data.sender, data.recipient));
+}));
+
 router.post("/orders", asyncHandler(async (req, res) => {
   const data = req.body;
   const orderService = new OrderService(db);
@@ -256,12 +262,27 @@ router.post("/orders", asyncHandler(async (req, res) => {
 }));
 
 router.post("/messages-unread", requireAuthentication, asyncHandler(async (req, res) => {
-  const recipient = getUserId(req);
+  const recipient = (req.user && req.user.email)
+    || req.headers["x-user-email"]
+    || (req.body && req.body.recipient)
+    || (req.query && req.query.recipient)
+    || getUserId(req);
   if (!recipient) {
     return res.status(401).json({ error: "User not logged in" });
   }
   const messageService = new MessageService(db);
   return sendResult(res, await messageService.getUnreadMessages(recipient));
+}));
+
+router.post("/messages-read", requireAuthentication, asyncHandler(async (req, res) => {
+  const data = req.body || {};
+  const sender = data.sender;
+  const recipient = data.recipient
+    || (req.user && req.user.email)
+    || req.headers["x-user-email"];
+
+  const messageService = new MessageService(db);
+  return sendResult(res, await messageService.markMessagesAsRead(sender, recipient));
 }));
 
 router.post("/ratings", requireAuthentication, asyncHandler(async (req, res) => {

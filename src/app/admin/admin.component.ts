@@ -307,6 +307,28 @@ export class AdminComponent implements OnInit, OnDestroy {
       return;
     }
 
+    this.http.post<any>(`${this.apiUrl}messages-unread`, {}, {
+      headers: this.getHeaders(),
+      withCredentials: true
+    }).subscribe({
+      next: (result: any) => {
+        const count = Number(result?.count);
+        if (Number.isFinite(count)) {
+          this.unreadMessagesCount = count;
+          return;
+        }
+
+        this.refreshAdminUnreadMessagesFallback(adminEmail);
+      },
+      error: () => {
+        // Fallback to conversation scan for backward compatibility.
+        this.refreshAdminUnreadMessagesFallback(adminEmail);
+      }
+    });
+  }
+
+  private refreshAdminUnreadMessagesFallback(adminEmail: string): void {
+
     this.http.get<any[]>(`${this.apiUrl}all-users?currentUser=${encodeURIComponent(adminEmail)}`).pipe(
       catchError(() => of([] as any[])),
       map((users: any[]) => users || []),
@@ -804,7 +826,8 @@ export class AdminComponent implements OnInit, OnDestroy {
     
     const headers: any = {
       'Content-Type': 'application/json',
-      'x-user-id': adminUserId
+      'x-user-id': adminUserId,
+      'x-user-email': this.normalizeEmail(userEmail)
     };
     
     // Add Authorization header if token exists

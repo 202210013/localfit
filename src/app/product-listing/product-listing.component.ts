@@ -8,7 +8,7 @@ import { AuthService } from '../services/auth.service';
 import { Router } from '@angular/router';
 import Swal from 'sweetalert2';
 import { environment } from '../../environments/environment';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Subscription, forkJoin, interval, of } from 'rxjs';
 import { catchError, map, switchMap } from 'rxjs/operators';
 
@@ -655,6 +655,23 @@ logout() {
     return this.normalizeEmail(localStorage.getItem('user_email'));
   }
 
+  private getAuthHeaders(): HttpHeaders {
+    const token = sessionStorage.getItem('admin_auth_token') || localStorage.getItem('auth_token') || localStorage.getItem('token') || '';
+    const userId = localStorage.getItem('userId') || '';
+    const userEmail = this.getUserEmail();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'x-user-id': userId,
+      'x-user-email': userEmail
+    };
+
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    return new HttpHeaders(headers);
+  }
+
   private getUserReadStateKey(email: string): string {
     return `message_last_read_user_${email}`;
   }
@@ -701,6 +718,28 @@ logout() {
       this.unreadMessages = 0;
       return;
     }
+
+    this.http.post<any>(`${environment.apiUrl}messages-unread`, {}, {
+      headers: this.getAuthHeaders(),
+      withCredentials: true
+    }).subscribe({
+      next: (result: any) => {
+        const count = Number(result?.count);
+        if (Number.isFinite(count)) {
+          this.unreadMessages = count;
+          return;
+        }
+
+        this.getUnreadMessagesFallback(currentUser);
+      },
+      error: () => {
+        // Fallback to conversation scan for backward compatibility.
+        this.getUnreadMessagesFallback(currentUser);
+      }
+    });
+  }
+
+  private getUnreadMessagesFallback(currentUser: string): void {
 
     this.http.get<any[]>(`${environment.apiUrl}all-users?currentUser=${encodeURIComponent(currentUser)}`).pipe(
       catchError(() => of([] as any[])),

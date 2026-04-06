@@ -5,12 +5,19 @@ class MessageService extends BaseService {
     super(db);
   }
 
+  normalizeEmail(email) {
+    return String(email || "").trim().toLowerCase();
+  }
+
   async getMessagesBetween(user1, user2) {
+    const normalizedUser1 = this.normalizeEmail(user1);
+    const normalizedUser2 = this.normalizeEmail(user2);
+
     const rows = await this.db.query(
-      `SELECT sender, recipient, content, timestamp FROM messages
-       WHERE (sender = ? AND recipient = ?) OR (sender = ? AND recipient = ?)
+      `SELECT sender, recipient, content, timestamp, is_read FROM messages
+       WHERE (LOWER(sender) = ? AND LOWER(recipient) = ?) OR (LOWER(sender) = ? AND LOWER(recipient) = ?)
        ORDER BY id ASC`,
-      [user1, user2, user2, user1]
+      [normalizedUser1, normalizedUser2, normalizedUser2, normalizedUser1]
     );
     return rows;
   }
@@ -21,8 +28,8 @@ class MessageService extends BaseService {
     }
 
     await this.db.query("INSERT INTO messages (sender, recipient, content) VALUES (?, ?, ?)", [
-      data.sender,
-      data.recipient,
+      this.normalizeEmail(data.sender),
+      this.normalizeEmail(data.recipient),
       data.content
     ]);
 
@@ -30,11 +37,32 @@ class MessageService extends BaseService {
   }
 
   async getUnreadMessages(recipient) {
+    const normalizedRecipient = this.normalizeEmail(recipient);
+
     const rows = await this.db.query(
-      "SELECT COUNT(*) as count FROM messages WHERE recipient = ? AND is_read = 0",
-      [recipient]
+      "SELECT COUNT(*) as count FROM messages WHERE LOWER(recipient) = ? AND is_read = 0",
+      [normalizedRecipient]
     );
     return rows[0] || { count: 0 };
+  }
+
+  async markMessagesAsRead(sender, recipient) {
+    const normalizedSender = this.normalizeEmail(sender);
+    const normalizedRecipient = this.normalizeEmail(recipient);
+
+    if (!normalizedSender || !normalizedRecipient) {
+      return { error: "sender and recipient are required" };
+    }
+
+    const result = await this.db.query(
+      "UPDATE messages SET is_read = 1 WHERE LOWER(sender) = ? AND LOWER(recipient) = ? AND is_read = 0",
+      [normalizedSender, normalizedRecipient]
+    );
+
+    return {
+      success: true,
+      updated: Number((result && result.affectedRows) || 0)
+    };
   }
 }
 

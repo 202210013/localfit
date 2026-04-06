@@ -127,22 +127,57 @@ export class MessageComponent implements OnInit, OnDestroy {
       return a.clientId === b.clientId;
     }
 
+    // Deduplicate optimistic/socket message and DB-synced copy of the same content.
+    // This targets cases where one copy has clientId and the other does not.
+    const hasSingleClientId = Boolean(a.clientId) !== Boolean(b.clientId);
+    if (hasSingleClientId &&
+        a.sender === b.sender &&
+        a.recipient === b.recipient &&
+        a.content === b.content) {
+      const timeA = this.getMessageTimeMs(a);
+      const timeB = this.getMessageTimeMs(b);
+      if (timeA > 0 && timeB > 0 && Math.abs(timeA - timeB) <= 15000) {
+        return true;
+      }
+    }
+
     return a.sender === b.sender &&
       a.recipient === b.recipient &&
       a.content === b.content &&
       this.getMessageTimeMs(a) === this.getMessageTimeMs(b);
   }
 
-  private addMessageIfMissing(message: Message): boolean {
+  private addMessageIfMissing(message: Message): 'added' | 'updated' | 'unchanged' {
     const existingIndex = this.messages.findIndex((existing) => this.isSameMessage(existing, message));
     if (existingIndex === -1) {
       this.messages = [...this.messages, message];
-      return true;
+      return 'added';
     }
 
     // Keep local read flag in sync when socket/API sends an updated status.
-    this.messages[existingIndex] = { ...this.messages[existingIndex], is_read: message.is_read };
-    return false;
+    const existingReadFlag = this.getReadFlag(this.messages[existingIndex].is_read);
+    const incomingReadFlag = this.getReadFlag(message.is_read);
+
+    if (incomingReadFlag !== null && incomingReadFlag !== existingReadFlag) {
+      this.messages[existingIndex] = { ...this.messages[existingIndex], is_read: message.is_read };
+      return 'updated';
+    }
+
+    return 'unchanged';
+  }
+
+  private hasUnreadMessagesFromUser(userEmail: string): boolean {
+    const normalizedUserEmail = this.normalizeEmail(userEmail);
+    const currentUserEmail = this.normalizeEmail(this.userName);
+
+    return this.messages.some((message) => {
+      const sender = this.normalizeEmail(message.sender);
+      const recipient = this.normalizeEmail(message.recipient);
+      const readFlag = this.getReadFlag(message.is_read);
+      const isUnread = readFlag === null ? true : readFlag !== 1;
+
+      return sender === normalizedUserEmail && recipient === currentUserEmail && isUnread;
+    });
   }
 
   private refreshUnreadCounts(): void {
@@ -235,8 +270,10 @@ export class MessageComponent implements OnInit, OnDestroy {
 
     this.socket.on('all-messages', (msgs: Message[]) => {
       this.ngZone.run(() => {
-        this.messages = msgs;
-        msgs.forEach((msg) => {
+        // Merge snapshot messages so reconnects never wipe DB-synced local state.
+        (msgs || []).forEach((msg) => {
+          this.addMessageIfMissing(msg);
+
           if (msg.sender === this.userName) {
             this.ensureUserExists(msg.recipient);
           }
@@ -244,12 +281,14 @@ export class MessageComponent implements OnInit, OnDestroy {
             this.ensureUserExists(msg.sender);
           }
         });
+
         this.refreshUnreadCounts();
       });
     });
     this.socket.on('receive-message', (msg: Message) => {
       this.ngZone.run(() => {
-        const isNewMessage = this.addMessageIfMissing(msg);
+        const mergeResult = this.addMessageIfMissing(msg);
+        const isNewMessage = mergeResult === 'added';
 
         if (msg.sender === this.userName) {
           this.ensureUserExists(msg.recipient);
@@ -316,23 +355,16 @@ export class MessageComponent implements OnInit, OnDestroy {
 
     forkJoin(requests).subscribe((results) => {
       this.ngZone.run(() => {
-        let changed = false;
-
         results.forEach(({ user, msgs }) => {
           this.ensureUserExists(user.email);
 
           msgs.forEach((message) => {
-            const beforeCount = this.messages.length;
             this.addMessageIfMissing(message);
-            if (this.messages.length !== beforeCount) {
-              changed = true;
-            }
           });
         });
 
-        if (changed) {
-          this.refreshUnreadCounts();
-        }
+        // Always recompute unread counts on polling so UI stays aligned with backend read flags.
+        this.refreshUnreadCounts();
       });
     });
   }
@@ -340,7 +372,6 @@ export class MessageComponent implements OnInit, OnDestroy {
   selectRecipient(user: User) {
   if (user.email !== this.userName) {
     this.selectedRecipient = user;
-    this.markConversationAsRead(user.email);
     this.messageForm.reset();
     // Fetch messages from backend for this conversation
     this.http.get<Message[]>(
@@ -355,6 +386,9 @@ export class MessageComponent implements OnInit, OnDestroy {
       });
       this.messages = all;
       this.refreshUnreadCounts();
+      if (this.hasUnreadMessagesFromUser(user.email)) {
+        this.markConversationAsRead(user.email);
+      }
       // Scroll to bottom to show most recent messages
       setTimeout(() => {
         this.scrollToBottom();
