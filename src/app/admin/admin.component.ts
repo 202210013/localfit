@@ -307,7 +307,7 @@ export class AdminComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.http.post<any>(`${this.apiUrl}messages-unread`, {}, {
+    this.http.post<any>(`${this.apiUrl}messages-unread`, { recipient: adminEmail }, {
       headers: this.getHeaders(),
       withCredentials: true
     }).subscribe({
@@ -826,8 +826,7 @@ export class AdminComponent implements OnInit, OnDestroy {
     
     const headers: any = {
       'Content-Type': 'application/json',
-      'x-user-id': adminUserId,
-      'x-user-email': this.normalizeEmail(userEmail)
+      'x-user-id': adminUserId
     };
     
     // Add Authorization header if token exists

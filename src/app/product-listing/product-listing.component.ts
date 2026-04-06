@@ -658,11 +658,9 @@ logout() {
   private getAuthHeaders(): HttpHeaders {
     const token = sessionStorage.getItem('admin_auth_token') || localStorage.getItem('auth_token') || localStorage.getItem('token') || '';
     const userId = localStorage.getItem('userId') || '';
-    const userEmail = this.getUserEmail();
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'x-user-id': userId,
-      'x-user-email': userEmail
+      'x-user-id': userId
     };
 
     if (token) {
@@ -719,7 +717,7 @@ logout() {
       return;
     }
 
-    this.http.post<any>(`${environment.apiUrl}messages-unread`, {}, {
+    this.http.post<any>(`${environment.apiUrl}messages-unread`, { recipient: currentUser }, {
       headers: this.getAuthHeaders(),
       withCredentials: true
     }).subscribe({
