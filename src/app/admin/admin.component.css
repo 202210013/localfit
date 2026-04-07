@@ -8115,3 +8115,168 @@ img.product-image {
     font-size: 0.9rem;
   }
 }
+
+/* ===== ORDERS + INVENTORY LAYOUT HOTFIX ===== */
+
+.orders-section {
+  padding: 16px;
+}
+
+.orders-header {
+  gap: 16px;
+}
+
+.order-stats {
+  gap: 10px;
+}
+
+.order-controls {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) auto auto;
+  gap: 14px;
+  align-items: center;
+}
+
+.search-container {
+  min-width: 0;
+}
+
+.filter-controls {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.table-container {
+  overflow-x: auto;
+}
+
+.sortable-table {
+  min-width: 1120px;
+}
+
+.sortable-table th,
+.sortable-table td {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.sortable-table th:nth-child(1),
+.sortable-table td:nth-child(1) { width: 84px; }
+
+.sortable-table th:nth-child(2),
+.sortable-table td:nth-child(2) { width: 200px; }
+
+.sortable-table th:nth-child(3),
+.sortable-table td:nth-child(3) { width: 240px; }
+
+.sortable-table th:nth-child(4),
+.sortable-table td:nth-child(4) { width: 100px; }
+
+.sortable-table th:nth-child(5),
+.sortable-table td:nth-child(5) { width: 80px; }
+
+.sortable-table th:nth-child(6),
+.sortable-table td:nth-child(6) { width: 150px; }
+
+.sortable-table th:nth-child(7),
+.sortable-table td:nth-child(7) { width: 150px; }
+
+.sortable-table th:nth-child(8),
+.sortable-table td:nth-child(8) { width: 130px; }
+
+.inventory-section {
+  padding: 12px;
+}
+
+.inventory-table-container {
+  padding: 20px;
+}
+
+.inventory-table {
+  min-width: 1280px;
+  table-layout: fixed;
+}
+
+.inventory-table thead tr th {
+  white-space: normal;
+  line-height: 1.2;
+  letter-spacing: 0.4px;
+}
+
+.inventory-table .product-image {
+  width: 108px;
+  min-width: 108px;
+  max-width: 108px;
+}
+
+.inventory-table .product-name {
+  width: 250px;
+  min-width: 250px;
+  max-width: 250px;
+}
+
+.inventory-table .size-column,
+.inventory-table .size {
+  width: 90px;
+  min-width: 90px;
+  max-width: 90px;
+}
+
+.inventory-table .starting-stock-column,
+.inventory-table .starting-stock,
+.inventory-table .current-stock-column,
+.inventory-table .current-stock,
+.inventory-table .confirmed-orders-column,
+.inventory-table .confirmed-orders {
+  width: 145px;
+  min-width: 145px;
+  max-width: 145px;
+}
+
+.inventory-table .sold-column,
+.inventory-table .sold {
+  width: 90px;
+  min-width: 90px;
+  max-width: 90px;
+}
+
+.inventory-table .action {
+  width: 150px;
+  min-width: 150px;
+}
+
+@media (max-width: 1200px) {
+  .order-controls {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .size-filter-container,
+  .filter-controls {
+    width: 100%;
+  }
+
+  .filter-controls {
+    justify-content: flex-start;
+  }
+
+  .sortable-table {
+    min-width: 1040px;
+  }
+
+  .inventory-table {
+    min-width: 1180px;
+  }
+}
+
+@media (max-width: 768px) {
+  .orders-section,
+  .inventory-section {
+    padding: 10px;
+  }
+
+  .orders-header,
+  .order-controls {
+    padding: 14px;
+  }
+}

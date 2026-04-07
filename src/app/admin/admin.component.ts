@@ -315,6 +315,10 @@ export class AdminComponent implements OnInit, OnDestroy {
         const count = Number(result?.count);
         if (Number.isFinite(count)) {
           this.unreadMessagesCount = count;
+          if (count === 0) {
+            // Cross-check with conversation scan when API count is zero.
+            this.refreshAdminUnreadMessagesFallback(adminEmail, count);
+          }
           return;
         }
 
@@ -327,9 +331,12 @@ export class AdminComponent implements OnInit, OnDestroy {
     });
   }
 
-  private refreshAdminUnreadMessagesFallback(adminEmail: string): void {
+  private refreshAdminUnreadMessagesFallback(adminEmail: string, baseCount: number = 0): void {
 
-    this.http.get<any[]>(`${this.apiUrl}all-users?currentUser=${encodeURIComponent(adminEmail)}`).pipe(
+    this.http.get<any[]>(`${this.apiUrl}all-users?currentUser=${encodeURIComponent(adminEmail)}`, {
+      headers: this.getHeaders(),
+      withCredentials: true
+    }).pipe(
       catchError(() => of([] as any[])),
       map((users: any[]) => users || []),
       map((users: any[]) => users.filter((user: any) => this.normalizeEmail(user.email) && this.normalizeEmail(user.email) !== adminEmail)),
@@ -341,7 +348,10 @@ export class AdminComponent implements OnInit, OnDestroy {
         }
 
         return forkJoin(emails.map((email: string) =>
-          this.http.get<any[]>(`${this.apiUrl}messages?user1=${encodeURIComponent(adminEmail)}&user2=${encodeURIComponent(email)}`).pipe(
+          this.http.get<any[]>(`${this.apiUrl}messages?user1=${encodeURIComponent(adminEmail)}&user2=${encodeURIComponent(email)}`, {
+            headers: this.getHeaders(),
+            withCredentials: true
+          }).pipe(
             map((messages: any[]) => ({ email, messages: messages || [] })),
             catchError(() => of({ email, messages: [] as any[] }))
           )
@@ -379,7 +389,7 @@ export class AdminComponent implements OnInit, OnDestroy {
         });
       });
 
-      this.unreadMessagesCount = unread;
+      this.unreadMessagesCount = Math.max(baseCount, unread);
     });
   }
 

@@ -725,6 +725,10 @@ logout() {
         const count = Number(result?.count);
         if (Number.isFinite(count)) {
           this.unreadMessages = count;
+          if (count === 0) {
+            // Cross-check with conversation scan when API count is zero.
+            this.getUnreadMessagesFallback(currentUser, count);
+          }
           return;
         }
 
@@ -737,9 +741,12 @@ logout() {
     });
   }
 
-  private getUnreadMessagesFallback(currentUser: string): void {
+  private getUnreadMessagesFallback(currentUser: string, baseCount: number = 0): void {
 
-    this.http.get<any[]>(`${environment.apiUrl}all-users?currentUser=${encodeURIComponent(currentUser)}`).pipe(
+    this.http.get<any[]>(`${environment.apiUrl}all-users?currentUser=${encodeURIComponent(currentUser)}`, {
+      headers: this.getAuthHeaders(),
+      withCredentials: true
+    }).pipe(
       catchError(() => of([] as any[])),
       map((users: any[]) => users || []),
       map((users: any[]) => users.filter((user: any) => this.normalizeEmail(user.email) && this.normalizeEmail(user.email) !== currentUser)),
@@ -751,7 +758,10 @@ logout() {
         }
 
         return forkJoin(emails.map((email: string) =>
-        this.http.get<any[]>(`${environment.apiUrl}messages?user1=${encodeURIComponent(currentUser)}&user2=${encodeURIComponent(email)}`).pipe(
+        this.http.get<any[]>(`${environment.apiUrl}messages?user1=${encodeURIComponent(currentUser)}&user2=${encodeURIComponent(email)}`, {
+          headers: this.getAuthHeaders(),
+          withCredentials: true
+        }).pipe(
           map((messages: any[]) => ({ email, messages: messages || [] })),
           catchError(() => of({ email, messages: [] as any[] }))
         )
@@ -788,7 +798,7 @@ logout() {
         });
       });
 
-      this.unreadMessages = unread;
+      this.unreadMessages = Math.max(baseCount, unread);
     });
   }
 
