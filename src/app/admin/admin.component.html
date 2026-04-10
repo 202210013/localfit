@@ -736,6 +736,10 @@
           Low Stock Only
           <span class="low-stock-count" *ngIf="getLowStockCount() > 0">({{ getLowStockCount() }})</span>
         </button>
+        <button (click)="generateInventoryReport()" class="inventory-report-btn">
+          <i class="fa-solid fa-file-export"></i>
+          Generate Report
+        </button>
       </div>
     </div>
 

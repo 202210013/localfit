@@ -601,6 +601,181 @@ export class AdminComponent implements OnInit, OnDestroy {
     });
   }
 
+  async generateInventoryReport(): Promise<void> {
+    if (this.inventoryLoading) {
+      Swal.fire('Please wait', 'Inventory is still loading. Try again in a moment.', 'info');
+      return;
+    }
+
+    const inventoryRows = this.getInventoryRowsForReport();
+    if (inventoryRows.length === 0) {
+      Swal.fire('No data', 'No inventory rows available for report generation.', 'warning');
+      return;
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Inventory Report');
+    const startRow = await this.addLogoHeader(worksheet, 'INVENTORY MANAGEMENT REPORT');
+
+    const totalProducts = new Set(inventoryRows.map((row: any) => row.productName)).size;
+    const totalItems = inventoryRows.length;
+    const totalStartingStock = inventoryRows.reduce((sum: number, row: any) => sum + row.starting, 0);
+    const totalCurrentStock = inventoryRows.reduce((sum: number, row: any) => sum + row.current, 0);
+    const totalSoldUnits = inventoryRows.reduce((sum: number, row: any) => sum + row.sold, 0);
+    const totalConfirmedOrders = inventoryRows.reduce((sum: number, row: any) => sum + row.confirmedOrders, 0);
+    const lowStockRows = inventoryRows.filter((row: any) => row.current < 10);
+    const outOfStockRows = inventoryRows.filter((row: any) => row.current <= 0);
+    let currentRow = startRow;
+    worksheet.mergeCells(currentRow, 1, currentRow, 6);
+    const filterCell = worksheet.getCell(currentRow, 1);
+    filterCell.value = `View Filters: Search="${this.inventorySearchTerm || 'None'}" | Low Stock Only=${this.showOnlyLowStock ? 'Yes' : 'No'}`;
+    filterCell.font = { italic: true, size: 10, color: { argb: 'FF495057' } };
+    filterCell.alignment = { horizontal: 'center' };
+    currentRow += 2;
+
+    worksheet.mergeCells(currentRow, 1, currentRow, 6);
+    const summaryTitleCell = worksheet.getCell(currentRow, 1);
+    summaryTitleCell.value = 'INVENTORY SUMMARY';
+    summaryTitleCell.font = { bold: true, size: 14 };
+    summaryTitleCell.alignment = { horizontal: 'center' };
+    summaryTitleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFCCCCCC' } };
+    currentRow++;
+
+    worksheet.addRow(['Total Products', totalProducts, '', 'Total Items', totalItems, '']);
+    worksheet.addRow(['Total Starting Stock', totalStartingStock, '', 'Total Current Stock', totalCurrentStock, '']);
+    worksheet.addRow(['Total Sold Units', totalSoldUnits, '', 'Confirmed Orders', totalConfirmedOrders, '']);
+    worksheet.addRow(['Low Stock Items (<10)', lowStockRows.length, '', 'Out of Stock Items', outOfStockRows.length, '']);
+    worksheet.addRow([]);
+    currentRow += 5;
+
+    // Compact sheet for quick scanning (Product shown once, sizes listed below).
+    const compactSheet = workbook.addWorksheet('Products and Sizes');
+    const compactHeaderRow = compactSheet.addRow(['Products', 'Size']);
+    compactHeaderRow.font = { bold: true, size: 11 };
+    compactHeaderRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+    compactHeaderRow.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    const compactRows = [...inventoryRows].sort((a: any, b: any) => {
+      const productCompare = a.productName.localeCompare(b.productName, undefined, { sensitivity: 'base' });
+      if (productCompare !== 0) {
+        return productCompare;
+      }
+      return this.compareSizeLabels(a.size, b.size);
+    });
+
+    let previousCompactProduct = '';
+    compactRows.forEach((row: any) => {
+      const showProductName = row.productName !== previousCompactProduct;
+      const compactRow = compactSheet.addRow([
+        showProductName ? row.productName : '',
+        row.size
+      ]);
+
+      compactRow.alignment = { vertical: 'middle', horizontal: 'left' };
+      if (showProductName) {
+        compactRow.getCell(1).font = { bold: true };
+      }
+      previousCompactProduct = row.productName;
+    });
+
+    compactSheet.columns = [
+      { width: 55 },
+      { width: 12 }
+    ];
+
+    worksheet.mergeCells(currentRow, 1, currentRow, 6);
+    const detailsTitleCell = worksheet.getCell(currentRow, 1);
+    detailsTitleCell.value = 'INVENTORY DETAILS';
+    detailsTitleCell.font = { bold: true, size: 14 };
+    detailsTitleCell.alignment = { horizontal: 'center' };
+    detailsTitleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFCCCCCC' } };
+    currentRow++;
+
+    const headerRow = worksheet.addRow([
+      'Product',
+      'Size',
+      'Starting Stock',
+      'Current Stock',
+      'Sold',
+      'Confirmed Orders'
+    ]);
+    headerRow.font = { bold: true, size: 11 };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+    headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    const detailedRows = [...inventoryRows]
+      .sort((a: any, b: any) => {
+        const productCompare = a.productName.localeCompare(b.productName, undefined, { sensitivity: 'base' });
+        if (productCompare !== 0) {
+          return productCompare;
+        }
+
+        return this.compareSizeLabels(a.size, b.size);
+      });
+
+    let previousProductName = '';
+    detailedRows.forEach((row: any) => {
+        const showProductName = row.productName !== previousProductName;
+        const detailRow = worksheet.addRow([
+          showProductName ? row.productName : '',
+          row.size,
+          row.starting,
+          row.current,
+          row.sold,
+          row.confirmedOrders
+        ]);
+
+        detailRow.alignment = { vertical: 'middle' };
+        if (showProductName) {
+          detailRow.getCell(1).font = { bold: true };
+        }
+        previousProductName = row.productName;
+      });
+
+    this.autoFitColumns(worksheet);
+
+    const reportScope = this.showOnlyLowStock ? 'LowStock' : 'FullInventory';
+    const filename = `Inventory_Report_${reportScope}_${new Date().toISOString().split('T')[0]}.xlsx`;
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    FileSaver.saveAs(blob, filename);
+
+    Swal.fire({
+      icon: 'success',
+      title: 'Inventory Report Generated',
+      html: `
+        <div style="text-align: left; line-height: 1.6;">
+          <p><strong>Summary</strong></p>
+          <p>Total Products: ${totalProducts}</p>
+          <p>Total Items: ${totalItems}</p>
+          <p>Low Stock Items: ${lowStockRows.length}</p>
+          <p>Out of Stock Items: ${outOfStockRows.length}</p>
+        </div>
+      `,
+      confirmButtonColor: '#780001'
+    });
+  }
+
+  private getInventoryRowsForReport(): any[] {
+    const source = this.filteredInventory.length > 0 ? this.filteredInventory : this.inventoryItems;
+    const rows: any[] = [];
+
+    source.forEach((entry: any) => {
+      (entry.sizes || []).forEach((row: any) => {
+        rows.push({
+          productName: row.productName || entry.product?.name || 'N/A',
+          size: row.size || 'N/A',
+          starting: Number(row.starting || 0),
+          current: Number(row.current || 0),
+          sold: Number(row.sold || 0),
+          confirmedOrders: Number(row.confirmedOrders || 0)
+        });
+      });
+    });
+
+    return rows;
+  }
+
   // View switching methods
   switchToOrders() {
     this.currentView = 'orders';
@@ -2655,6 +2830,41 @@ private fetchYourProductsAndOrders(userEmail: string) {
 
     const totalRevenue = filteredOrders.reduce((sum, order) => sum + this.getProductPrice(order.product), 0);
     const avgOrderValue = filteredOrders.length > 0 ? totalRevenue / filteredOrders.length : 0;
+    const productSizeSalesMap: {[product: string]: {[size: string]: {qty: number, sales: number}}} = {};
+
+    filteredOrders.forEach(order => {
+      const product = order.product || 'N/A';
+      const size = order.size || 'N/A';
+      const qty = Number(order.quantity) || 1;
+      const sales = this.getProductPrice(order.product) * qty;
+
+      if (!productSizeSalesMap[product]) {
+        productSizeSalesMap[product] = {};
+      }
+      if (!productSizeSalesMap[product][size]) {
+        productSizeSalesMap[product][size] = { qty: 0, sales: 0 };
+      }
+
+      productSizeSalesMap[product][size].qty += qty;
+      productSizeSalesMap[product][size].sales += sales;
+    });
+
+    const productSizeSalesRows = Object.entries(productSizeSalesMap)
+      .sort(([, sizesA], [, sizesB]) => {
+        const totalA = Object.values(sizesA).reduce((sum, entry) => sum + entry.sales, 0);
+        const totalB = Object.values(sizesB).reduce((sum, entry) => sum + entry.sales, 0);
+        return totalB - totalA;
+      })
+      .flatMap(([product, sizes]) =>
+        Object.entries(sizes)
+          .sort(([sizeA], [sizeB]) => this.compareSizeLabels(sizeA, sizeB))
+          .map(([size, data]) => ({
+            product,
+            size,
+            qty: data.qty,
+            sales: data.sales
+          }))
+      );
     const dateRangeText = this.reportStartDate && this.reportEndDate ? 
       `${new Date(this.reportStartDate).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'})} - ${new Date(this.reportEndDate).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'})}` : 
       'All Time';
@@ -2683,11 +2893,46 @@ private fetchYourProductsAndOrders(userEmail: string) {
     summaryTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFCCCCCC' } };
     currentRow++;
     
-    worksheet.addRow(['Total Revenue:', `₱${totalRevenue.toFixed(2)}`]);
+    worksheet.addRow(['Total Sales:', `₱${totalRevenue.toFixed(2)}`]);
     worksheet.addRow(['Total Orders:', filteredOrders.length]);
     worksheet.addRow(['Average Order Value:', `₱${avgOrderValue.toFixed(2)}`]);
     worksheet.addRow([]);
     currentRow += 4;
+
+    // Product/Size Sales Summary
+    worksheet.mergeCells(currentRow, 1, currentRow, 4);
+    const productSizeTitle = worksheet.getCell(currentRow, 1);
+    productSizeTitle.value = 'PRODUCT SIZE SALES SUMMARY';
+    productSizeTitle.font = { bold: true, size: 14 };
+    productSizeTitle.alignment = { horizontal: 'center' };
+    productSizeTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFCCCCCC' } };
+    currentRow++;
+
+    const productSizeHeaderRow = worksheet.addRow(['Products', 'Size', 'Qty', 'Sales']);
+    productSizeHeaderRow.font = { bold: true, size: 11 };
+    productSizeHeaderRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+    productSizeHeaderRow.alignment = { horizontal: 'center', vertical: 'middle' };
+    currentRow++;
+
+    if (productSizeSalesRows.length === 0) {
+      worksheet.addRow(['No completed sales in selected period', '-', 0, '₱0.00']);
+      currentRow++;
+    } else {
+      let currentProduct = '';
+      productSizeSalesRows.forEach(item => {
+        worksheet.addRow([
+          currentProduct === item.product ? '' : item.product,
+          item.size,
+          item.qty,
+          `₱${item.sales.toFixed(2)}`
+        ]);
+        currentProduct = item.product;
+        currentRow++;
+      });
+    }
+
+    worksheet.addRow([]);
+    currentRow++;
     
     // Sales Transactions
     worksheet.mergeCells(currentRow, 1, currentRow, 7);
@@ -2736,7 +2981,7 @@ private fetchYourProductsAndOrders(userEmail: string) {
           <p><strong>Report Details:</strong></p>
           <ul style="margin: 10px 0;">
             <li>Period: ${dateRangeText}</li>
-            <li>Total Revenue: ₱${totalRevenue.toFixed(2)}</li>
+            <li>Total Sales: ₱${totalRevenue.toFixed(2)}</li>
             <li>Orders: ${filteredOrders.length}</li>
           </ul>
         </div>
@@ -2801,7 +3046,7 @@ private fetchYourProductsAndOrders(userEmail: string) {
       { 'A': '', 'B': '', 'C': '', 'D': '' },
       { 'A': 'Metric', 'B': 'Value', 'C': 'Details', 'D': '' },
       { 'A': '─────────────────────────────────────────────────────────', 'B': '', 'C': '', 'D': '' },
-      { 'A': '💰 Total Revenue', 'B': `₱${totalRevenue.toFixed(2)}`, 'C': 'From completed orders', 'D': '' },
+      { 'A': '💰 Total Sales', 'B': `₱${totalRevenue.toFixed(2)}`, 'C': 'From completed orders', 'D': '' },
       { 'A': '📦 Total Orders', 'B': filteredOrders.length.toString(), 'C': 'Successfully completed', 'D': '' },
       { 'A': '📊 Average Order Value', 'B': `₱${avgOrderValue.toFixed(2)}`, 'C': 'Revenue per order', 'D': '' },
       { 'A': '📝 Orders with OR', 'B': ordersWithOR.toString(), 'C': `${filteredOrders.length > 0 ? ((ordersWithOR/filteredOrders.length)*100).toFixed(1) : '0'}% of total`, 'D': '' },
@@ -2829,7 +3074,7 @@ private fetchYourProductsAndOrders(userEmail: string) {
       .slice(0, 5);
 
     reportSummaryData.push(
-      { 'A': 'Rank', 'B': 'Product', 'C': 'Sales', 'D': 'Revenue' },
+      { 'A': 'Rank', 'B': 'Product', 'C': 'Sales', 'D': 'Total Sales' },
       { 'A': '─────────────────────────────────────────────────────────', 'B': '', 'C': '', 'D': '' }
     );
 
@@ -2888,12 +3133,12 @@ private fetchYourProductsAndOrders(userEmail: string) {
         sizeDistributionData.push(
           { 'A': `📦 ${product}`, 'B': '', 'C': '' },
           { 'A': '─────────────────────────────────────────────────────────────────────────────', 'B': '', 'C': '' },
-          { 'A': 'Size', 'B': 'Quantity Sold', 'C': 'Revenue' }
+          { 'A': 'Size', 'B': 'Quantity Sold', 'C': 'Sales' }
         );
 
-        // Sort sizes by count
+        // Sort sizes using standard sequence: S, M, L, XL, ...
         Object.entries(sizes)
-          .sort(([,a], [,b]) => b.count - a.count)
+          .sort(([sizeA], [sizeB]) => this.compareSizeLabels(sizeA, sizeB))
           .forEach(([size, data]) => {
             sizeDistributionData.push({
               'A': size,
@@ -2927,7 +3172,7 @@ private fetchYourProductsAndOrders(userEmail: string) {
     });
 
     Object.entries(overallSizeTotals)
-      .sort(([,a], [,b]) => b - a)
+      .sort(([sizeA], [sizeB]) => this.compareSizeLabels(sizeA, sizeB))
       .forEach(([size, count]) => {
         const percentage = ((count / filteredOrders.length) * 100).toFixed(1);
         sizeDistributionData.push({
@@ -2974,7 +3219,7 @@ private fetchYourProductsAndOrders(userEmail: string) {
       { 'A': 'TOTALS', 'B': '', 'C': '', 'D': '', 'E': '', 'F': '', 'G': '' },
       { 'A': '─────────────────────────────────────────────────────────────────────────────', 'B': '', 'C': '', 'D': '', 'E': '', 'F': '', 'G': '' },
       { 'A': 'Total Transactions:', 'B': filteredOrders.length.toString(), 'C': '', 'D': '', 'E': '', 'F': '', 'G': '' },
-      { 'A': 'Total Revenue:', 'B': `₱${totalRevenue.toFixed(2)}`, 'C': '', 'D': '', 'E': '', 'F': '', 'G': '' },
+      { 'A': 'Total Sales:', 'B': `₱${totalRevenue.toFixed(2)}`, 'C': '', 'D': '', 'E': '', 'F': '', 'G': '' },
       { 'A': 'Period:', 'B': dateRangeText, 'C': '', 'D': '', 'E': '', 'F': '', 'G': '' }
     ];
 
@@ -3006,7 +3251,7 @@ private fetchYourProductsAndOrders(userEmail: string) {
           <p><strong>Report Details:</strong></p>
           <ul style="margin: 10px 0;">
             <li>Period: ${dateRangeText}</li>
-            <li>Total Revenue: ₱${totalRevenue.toFixed(2)}</li>
+            <li>Total Sales: ₱${totalRevenue.toFixed(2)}</li>
             <li>Orders: ${filteredOrders.length}</li>
             <li>Products: ${Object.keys(productRevenue).length}</li>
             <li>Sheets: 3 (Summary, Size Distribution, Transactions)</li>
@@ -3358,26 +3603,28 @@ private fetchYourProductsAndOrders(userEmail: string) {
       .filter((size): size is string => size !== undefined && size !== null && size.trim() !== '')
       .filter((value, index, self) => self.indexOf(value) === index); // Remove duplicates
     
-    // Define the correct size order
-    const sizeOrder = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
-    
-    // Sort sizes according to the defined order
-    return sizes.sort((a, b) => {
-      const indexA = sizeOrder.indexOf(a.toUpperCase());
-      const indexB = sizeOrder.indexOf(b.toUpperCase());
-      
-      // If both sizes are in the predefined order, sort by their position
-      if (indexA !== -1 && indexB !== -1) {
-        return indexA - indexB;
-      }
-      
-      // If only one size is in the predefined order, prioritize it
-      if (indexA !== -1) return -1;
-      if (indexB !== -1) return 1;
-      
-      // If neither size is in the predefined order, sort alphabetically
-      return a.localeCompare(b);
-    });
+    // Sort sizes in standard sequence starting from S
+    return sizes.sort((a, b) => this.compareSizeLabels(a, b));
+  }
+
+  private compareSizeLabels(a: string, b: string): number {
+    const indexA = this.getSizeOrderIndex(a);
+    const indexB = this.getSizeOrderIndex(b);
+
+    if (indexA !== indexB) {
+      return indexA - indexB;
+    }
+
+    return (a || '').localeCompare(b || '', undefined, { sensitivity: 'base' });
+  }
+
+  private getSizeOrderIndex(size: string): number {
+    // Keep S first as requested for report and UI ordering.
+    const sizeOrder = ['S', 'M', 'L', 'XL', 'XXL', 'XXXL', 'XS'];
+    const normalizedSize = (size || '').trim().toUpperCase();
+    const index = sizeOrder.indexOf(normalizedSize);
+
+    return index !== -1 ? index : sizeOrder.length;
   }
 
   // Track by function for ngFor performance

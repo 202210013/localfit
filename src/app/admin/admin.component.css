@@ -6932,6 +6932,35 @@ img.product-image {
   box-shadow: 0 6px 25px rgba(255, 107, 107, 0.6);
 }
 
+.inventory-report-btn {
+  background: linear-gradient(135deg, #780001 0%, #a30a0b 100%);
+  color: white;
+  border: none;
+  padding: 14px 24px;
+  border-radius: 25px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 4px 15px rgba(120, 0, 1, 0.3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.inventory-report-btn i {
+  font-size: 1rem;
+}
+
+.inventory-report-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(120, 0, 1, 0.45);
+  background: linear-gradient(135deg, #a30a0b 0%, #780001 100%);
+}
+
 @keyframes lowStockPulse {
   0%, 100% { 
     box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
@@ -7600,6 +7629,10 @@ img.product-image {
     white-space: nowrap;
   }
 
+  .inventory-report-btn {
+    white-space: nowrap;
+  }
+
   .inventory-table .size-column,
   .inventory-table .size {
     width: 100px;
@@ -7737,7 +7770,8 @@ img.product-image {
     max-width: 100%;
   }
 
-  .low-stock-filter-btn {
+  .low-stock-filter-btn,
+  .inventory-report-btn {
     width: 100%;
     justify-content: center;
     padding: 14px 20px;
