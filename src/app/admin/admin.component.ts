@@ -2944,20 +2944,30 @@ private fetchYourProductsAndOrders(userEmail: string) {
     productSizeHeaderRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
     productSizeHeaderRow.alignment = { horizontal: 'center', vertical: 'middle' };
     currentRow++;
+    const productSizeDataStartRow = currentRow;
+    let productSizeDataEndRow = currentRow;
 
     if (productSizeSalesRows.length === 0) {
-      worksheet.addRow(['No completed sales in selected period', '-', 0, '₱0.00']);
+      const emptyRow = worksheet.addRow(['No completed sales in selected period', '-', 0, '₱0.00']);
+      emptyRow.getCell(3).alignment = { horizontal: 'left' };
+      productSizeDataEndRow = currentRow;
       currentRow++;
     } else {
       let currentProduct = '';
       productSizeSalesRows.forEach(item => {
-        worksheet.addRow([
-          currentProduct === item.product ? '' : item.product,
+        const showProduct = currentProduct !== item.product;
+        const row = worksheet.addRow([
+          showProduct ? item.product : '',
           item.size,
           item.qty,
           `₱${item.sales.toFixed(2)}`
         ]);
+        if (showProduct) {
+          row.getCell(1).font = { bold: true };
+        }
+        row.getCell(3).alignment = { horizontal: 'left' };
         currentProduct = item.product;
+        productSizeDataEndRow = currentRow;
         currentRow++;
       });
     }
@@ -2995,6 +3005,16 @@ private fetchYourProductsAndOrders(userEmail: string) {
     
     // Auto-fit and align all columns
     this.autoFitColumns(worksheet);
+
+    // Re-apply Qty alignment for Product/Size Sales Summary after auto-fit rules.
+    for (let rowNum = productSizeDataStartRow; rowNum <= productSizeDataEndRow; rowNum++) {
+      worksheet.getRow(rowNum).getCell(3).alignment = {
+        horizontal: 'left',
+        vertical: 'middle',
+        wrapText: false,
+        shrinkToFit: false
+      };
+    }
     
     const filenameDateText = this.reportStartDate && this.reportEndDate ? 
       `${this.reportStartDate}_to_${this.reportEndDate}` : 
