@@ -830,6 +830,71 @@ export class AdminComponent implements OnInit, OnDestroy {
     this.calculateAnalytics(); // Recalculate for the new view
   }
 
+  private buildProductSizeSalesRows(orders: Order[], includeAllCatalogSizes: boolean = false): Array<{product: string, size: string, qty: number, sales: number}> {
+    const productSizeSalesMap: {[product: string]: {[size: string]: {qty: number, sales: number}}} = {};
+
+    if (includeAllCatalogSizes) {
+      this.products.forEach((product: any) => {
+        const productName = product?.name || 'N/A';
+        const availableSizes = Array.isArray(product?.available_sizes) ? product.available_sizes : [];
+
+        if (!productSizeSalesMap[productName]) {
+          productSizeSalesMap[productName] = {};
+        }
+
+        if (availableSizes.length === 0) {
+          productSizeSalesMap[productName]['N/A'] = { qty: 0, sales: 0 };
+          return;
+        }
+
+        availableSizes.forEach((size: string) => {
+          if (!productSizeSalesMap[productName][size]) {
+            productSizeSalesMap[productName][size] = { qty: 0, sales: 0 };
+          }
+        });
+      });
+    }
+
+    orders.forEach(order => {
+      const product = order.product || 'N/A';
+      const size = order.size || 'N/A';
+      const qty = Number(order.quantity) || 1;
+      const sales = this.getProductPrice(order.product) * qty;
+
+      if (!productSizeSalesMap[product]) {
+        productSizeSalesMap[product] = {};
+      }
+      if (!productSizeSalesMap[product][size]) {
+        productSizeSalesMap[product][size] = { qty: 0, sales: 0 };
+      }
+
+      productSizeSalesMap[product][size].qty += qty;
+      productSizeSalesMap[product][size].sales += sales;
+    });
+
+    return Object.entries(productSizeSalesMap)
+      .sort(([productA, sizesA], [productB, sizesB]) => {
+        const totalA = Object.values(sizesA).reduce((sum, entry) => sum + entry.sales, 0);
+        const totalB = Object.values(sizesB).reduce((sum, entry) => sum + entry.sales, 0);
+
+        if (totalA === totalB) {
+          return productA.localeCompare(productB, undefined, { sensitivity: 'base' });
+        }
+
+        return totalB - totalA;
+      })
+      .flatMap(([product, sizes]) =>
+        Object.entries(sizes)
+          .sort(([sizeA], [sizeB]) => this.compareSizeLabels(sizeA, sizeB))
+          .map(([size, data]) => ({
+            product,
+            size,
+            qty: data.qty,
+            sales: data.sales
+          }))
+      );
+  }
+
   // Get top products with their most sold size only
   getTopProductsWithSizes() {
     const productSizeMap: {[productName: string]: {
@@ -2830,41 +2895,7 @@ private fetchYourProductsAndOrders(userEmail: string) {
 
     const totalRevenue = filteredOrders.reduce((sum, order) => sum + this.getProductPrice(order.product), 0);
     const avgOrderValue = filteredOrders.length > 0 ? totalRevenue / filteredOrders.length : 0;
-    const productSizeSalesMap: {[product: string]: {[size: string]: {qty: number, sales: number}}} = {};
-
-    filteredOrders.forEach(order => {
-      const product = order.product || 'N/A';
-      const size = order.size || 'N/A';
-      const qty = Number(order.quantity) || 1;
-      const sales = this.getProductPrice(order.product) * qty;
-
-      if (!productSizeSalesMap[product]) {
-        productSizeSalesMap[product] = {};
-      }
-      if (!productSizeSalesMap[product][size]) {
-        productSizeSalesMap[product][size] = { qty: 0, sales: 0 };
-      }
-
-      productSizeSalesMap[product][size].qty += qty;
-      productSizeSalesMap[product][size].sales += sales;
-    });
-
-    const productSizeSalesRows = Object.entries(productSizeSalesMap)
-      .sort(([, sizesA], [, sizesB]) => {
-        const totalA = Object.values(sizesA).reduce((sum, entry) => sum + entry.sales, 0);
-        const totalB = Object.values(sizesB).reduce((sum, entry) => sum + entry.sales, 0);
-        return totalB - totalA;
-      })
-      .flatMap(([product, sizes]) =>
-        Object.entries(sizes)
-          .sort(([sizeA], [sizeB]) => this.compareSizeLabels(sizeA, sizeB))
-          .map(([size, data]) => ({
-            product,
-            size,
-            qty: data.qty,
-            sales: data.sales
-          }))
-      );
+    const productSizeSalesRows = this.buildProductSizeSalesRows(filteredOrders, true);
     const dateRangeText = this.reportStartDate && this.reportEndDate ? 
       `${new Date(this.reportStartDate).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'})} - ${new Date(this.reportEndDate).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'})}` : 
       'All Time';
