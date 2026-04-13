@@ -115,4 +115,20 @@ export class AuthService {
             console.log('setToken - Token set:', this.token);
         }
     }
+
+    forceClearSession(): void {
+        this.token = '';
+        this.userId = undefined;
+
+        if (isPlatformBrowser(this.platformId)) {
+            localStorage.removeItem('token');
+            localStorage.removeItem('userId');
+            localStorage.removeItem('user_email');
+            localStorage.removeItem('auth_token');
+
+            sessionStorage.removeItem('admin_user_email');
+            sessionStorage.removeItem('admin_auth_token');
+            sessionStorage.removeItem('admin_user_id');
+        }
+    }
 }
