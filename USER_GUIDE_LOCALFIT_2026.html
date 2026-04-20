@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LocalFit Detailed User Guide</title>
+  <style>
+    :root {
+      --text: #1f2937;
+      --muted: #4b5563;
+      --accent: #0f766e;
+      --line: #d1d5db;
+      --bg: #ffffff;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      color: var(--text);
+      background: #f8fafc;
+      line-height: 1.55;
+    }
+
+    .page {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 16px auto;
+      background: var(--bg);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+      padding: 24mm 20mm;
+    }
+
+    h1, h2, h3 {
+      color: #0f172a;
+      line-height: 1.25;
+      margin-top: 1.1em;
+      margin-bottom: 0.35em;
+    }
+
+    h1 {
+      margin-top: 0;
+      font-size: 30px;
+      border-bottom: 3px solid var(--accent);
+      padding-bottom: 10px;
+    }
+
+    h2 { font-size: 21px; color: var(--accent); }
+    h3 { font-size: 16px; }
+    p, li { font-size: 13.5px; }
+
+    .meta {
+      color: var(--muted);
+      border-left: 4px solid var(--accent);
+      padding-left: 12px;
+      margin: 12px 0 18px;
+    }
+
+    .toc {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #f8fffe;
+      margin-bottom: 18px;
+    }
+
+    .toc h2 {
+      margin-top: 0;
+      font-size: 36px;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      color: #4b5563;
+      margin-bottom: 12px;
+    }
+
+    .toc h2 .accent {
+      color: #3b82f6;
+    }
+
+    .toc ul {
+      margin: 0;
+      padding-left: 0;
+      list-style: none;
+    }
+
+    .toc li {
+      margin: 4px 0;
+      font-size: 17px;
+      color: #4b5563;
+    }
+
+    .toc li.major {
+      margin-top: 14px;
+      font-weight: 700;
+      color: #374151;
+      font-size: 18px;
+    }
+
+    .toc li.sub {
+      margin-left: 20px;
+      font-weight: 500;
+    }
+
+    .toc a { color: #4b5563; text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+
+    ul, ol { margin: 8px 0 12px 22px; }
+
+    .section {
+      page-break-inside: avoid;
+      margin-bottom: 8px;
+    }
+
+    .footer {
+      margin-top: 20px;
+      color: var(--muted);
+      font-size: 12px;
+      border-top: 1px solid var(--line);
+      padding-top: 8px;
+    }
+
+    @media print {
+      body { background: #ffffff; }
+      .page {
+        width: auto;
+        min-height: auto;
+        margin: 0;
+        box-shadow: none;
+        padding: 0;
+      }
+      @page {
+        size: A4;
+        margin: 16mm;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <h1>LocalFit Detailed User Guide</h1>
+    <div class="meta">
+      <div><strong>Version:</strong> 3.0</div>
+      <div><strong>Date:</strong> April 20, 2026</div>
+      <div><strong>Audience:</strong> Customer Users Only</div>
+      <div><strong>System:</strong> LocalFit Ecommerce Platform</div>
+    </div>
+
+    <div class="toc">
+      <h2>Table of <span class="accent">Contents</span></h2>
+      <ul>
+        <li class="major">1.0 General Information</li>
+        <li class="sub"><a href="#about">1.1 About This Guide</a></li>
+        <li class="sub"><a href="#overview">1.2 System Overview</a></li>
+
+        <li class="major">2.0 Accessing the Application</li>
+        <li class="sub"><a href="#account">2.1 Account Setup and Login</a></li>
+        <li class="sub"><a href="#navigation">2.2 User Dashboard and Navigation</a></li>
+
+        <li class="major">3.0 Product and Ordering Flow</li>
+        <li class="sub"><a href="#browse">3.1 Browsing and Searching Products</a></li>
+        <li class="sub"><a href="#selection">3.2 Selecting Size, Quantity, and Pickup Date</a></li>
+        <li class="sub"><a href="#cart">3.3 Cart Management</a></li>
+        <li class="sub"><a href="#order">3.4 Placing an Order</a></li>
+        <li class="sub"><a href="#status">3.5 Order Tracking and Status Guide</a></li>
+        <li class="sub"><a href="#pickup">3.6 Pickup Confirmation Process</a></li>
+
+        <li class="major">4.0 User Features</li>
+        <li class="sub"><a href="#rating">4.1 Ratings and Reviews</a></li>
+        <li class="sub"><a href="#messaging">4.2 Messaging and Chat</a></li>
+        <li class="sub"><a href="#notifications">4.3 Notifications and Unread Indicators</a></li>
+
+        <li class="major">5.0 Support and Reference</li>
+        <li class="sub"><a href="#troubleshooting">5.1 Common Errors and Troubleshooting</a></li>
+        <li class="sub"><a href="#security">5.2 Security and Privacy Best Practices</a></li>
+        <li class="sub"><a href="#faq">5.3 Frequently Asked Questions</a></li>
+        <li class="sub"><a href="#glossary">5.4 Glossary</a></li>
+        <li class="sub"><a href="#control">5.5 Document Control</a></li>
+      </ul>
+    </div>
+
+    <div class="section" id="about">
+      <h2>1. About This Guide</h2>
+      <p>This manual is a detailed, customer-focused guide for using LocalFit from registration until post-order actions such as pickup confirmation and ratings.</p>
+    </div>
+
+    <div class="section" id="overview">
+      <h2>2. System Overview</h2>
+      <p>LocalFit is a web-based shopping and order tracking platform with size-based ordering, order status tracking, ratings, and realtime messaging.</p>
+    </div>
+
+    <div class="section" id="account">
+      <h2>3. Account Setup and Login</h2>
+      <h3>3.1 Register</h3>
+      <ol>
+        <li>Open Register page.</li>
+        <li>Enter required account details.</li>
+        <li>Submit and proceed to Login.</li>
+      </ol>
+      <h3>3.2 Login</h3>
+      <ol>
+        <li>Enter credentials.</li>
+        <li>Sign in to access protected pages.</li>
+      </ol>
+      <h3>3.3 Logout</h3>
+      <p>Always log out when using shared devices.</p>
+    </div>
+
+    <div class="section" id="navigation">
+      <h2>4. User Dashboard and Navigation</h2>
+      <ul>
+        <li>/product-main</li>
+        <li>/product-listing</li>
+        <li>/cart</li>
+        <li>/orders</li>
+        <li>/messages</li>
+      </ul>
+    </div>
+
+    <div class="section" id="browse">
+      <h2>5. Browsing and Searching Products</h2>
+      <ol>
+        <li>Open Product Listing.</li>
+        <li>Use search to find products quickly.</li>
+        <li>Check product price, image, and available sizes.</li>
+      </ol>
+    </div>
+
+    <div class="section" id="selection">
+      <h2>6. Selecting Size, Quantity, and Pickup Date</h2>
+      <ul>
+        <li>Size selection is required before ordering.</li>
+        <li>Quantity must be valid.</li>
+        <li>Pickup date may be required depending on the order flow.</li>
+      </ul>
+    </div>
+
+    <div class="section" id="cart">
+      <h2>7. Cart Management</h2>
+      <ol>
+        <li>Add item to cart after selecting size and quantity.</li>
+        <li>Review cart details.</li>
+        <li>Update quantity or remove items as needed.</li>
+      </ol>
+    </div>
+
+    <div class="section" id="order">
+      <h2>8. Placing an Order</h2>
+      <ol>
+        <li>Confirm cart content.</li>
+        <li>Verify required fields.</li>
+        <li>Submit order and wait for success message.</li>
+      </ol>
+    </div>
+
+    <div class="section" id="status">
+      <h2>9. Order Tracking and Status Guide</h2>
+      <ul>
+        <li>Pending</li>
+        <li>Ready for Pickup</li>
+        <li>Declined</li>
+        <li>Completed</li>
+      </ul>
+      <p>Use Orders page to monitor each status change.</p>
+    </div>
+
+    <div class="section" id="pickup">
+      <h2>10. Pickup Confirmation Process</h2>
+      <ol>
+        <li>Open order in Ready for Pickup.</li>
+        <li>Click Confirm Pickup.</li>
+        <li>Enter OR number if prompted.</li>
+        <li>Confirm completion.</li>
+      </ol>
+    </div>
+
+    <div class="section" id="rating">
+      <h2>11. Ratings and Reviews</h2>
+      <ul>
+        <li>Available only for completed orders.</li>
+        <li>Rating scale is 1 to 5 stars.</li>
+        <li>One rating per order per user.</li>
+      </ul>
+    </div>
+
+    <div class="section" id="messaging">
+      <h2>12. Messaging and Chat</h2>
+      <ol>
+        <li>Open Messages page.</li>
+        <li>Type and send your concern.</li>
+        <li>Watch conversation updates in realtime.</li>
+      </ol>
+    </div>
+
+    <div class="section" id="notifications">
+      <h2>13. Notifications and Unread Indicators</h2>
+      <p>Unread indicators are cleared by opening and reading the latest messages.</p>
+    </div>
+
+    <div class="section" id="troubleshooting">
+      <h2>14. Common Errors and Troubleshooting</h2>
+      <h3>14.1 Cannot Log In</h3>
+      <p>Check credentials, clear browser storage, and retry.</p>
+      <h3>14.2 Cannot Add to Cart</h3>
+      <p>Confirm size and quantity are valid, then retry.</p>
+      <h3>14.3 Orders Not Showing</h3>
+      <p>Refresh page and re-login if session expired.</p>
+      <h3>14.4 Cannot Submit Rating</h3>
+      <p>Ensure order is completed and not previously rated.</p>
+      <h3>14.5 Messaging Delay</h3>
+      <p>Refresh Messages page and check internet stability.</p>
+    </div>
+
+    <div class="section" id="security">
+      <h2>15. Security and Privacy Best Practices</h2>
+      <ul>
+        <li>Use strong passwords.</li>
+        <li>Do not share account credentials.</li>
+        <li>Log out from shared devices.</li>
+        <li>Avoid sending sensitive data in chat.</li>
+      </ul>
+    </div>
+
+    <div class="section" id="faq">
+      <h2>16. Frequently Asked Questions</h2>
+      <p><strong>Do I need an account to order?</strong> Yes, ordering requires login.</p>
+      <p><strong>Can I rate more than once?</strong> No, one rating per completed order.</p>
+      <p><strong>Why is pickup confirmation blocked?</strong> The order may not be in Ready for Pickup status yet.</p>
+    </div>
+
+    <div class="section" id="glossary">
+      <h2>17. Glossary</h2>
+      <ul>
+        <li>Cart: temporary list before placing order.</li>
+        <li>Ready for Pickup: order is available for claiming.</li>
+        <li>Completed: final order status.</li>
+        <li>OR Number: reference number used during pickup confirmation when required.</li>
+      </ul>
+    </div>
+
+    <div class="section" id="control">
+      <h2>18. Document Control</h2>
+      <p>Version 3.0 - April 20, 2026 - Expanded into detailed customer-only user guide.</p>
+    </div>
+
+    <div class="footer">LocalFit Detailed User Guide v3.0 | April 20, 2026</div>
+  </div>
+</body>
+</html>
