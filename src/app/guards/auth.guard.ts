@@ -9,15 +9,12 @@ import { AuthService } from '../services/auth.service';
 export class AuthGuard implements CanActivate {
     constructor(private authService: AuthService, private router: Router) { }
 
-    private hasAdminSession(): boolean {
-        const adminToken = sessionStorage.getItem('admin_auth_token');
-        const adminUserId = sessionStorage.getItem('admin_user_id');
-        return Boolean(adminToken && adminUserId);
-    }
-
     canActivate(route: ActivatedRouteSnapshot, state: RouterStateSnapshot): boolean {
         if (state.url.startsWith('/admin')) {
-            if (this.hasAdminSession()) {
+            const adminToken = sessionStorage.getItem('admin_auth_token');
+            const adminUserId = sessionStorage.getItem('admin_user_id');
+
+            if (adminToken && adminUserId) {
                 return true;
             }
 
@@ -25,8 +22,7 @@ export class AuthGuard implements CanActivate {
             return false;
         }
 
-        // Allow user sessions and active admin sessions to access protected non-admin routes.
-        if (this.authService.isLoggedIn() || this.hasAdminSession()) {
+        if (this.authService.isLoggedIn()) {
             return true;
         } else {
             this.router.navigate(['/login']);
