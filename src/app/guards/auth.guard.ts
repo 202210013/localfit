@@ -9,12 +9,15 @@ import { AuthService } from '../services/auth.service';
 export class AuthGuard implements CanActivate {
     constructor(private authService: AuthService, private router: Router) { }
 
+    private hasAdminSession(): boolean {
+        const adminToken = sessionStorage.getItem('admin_auth_token');
+        const adminUserId = sessionStorage.getItem('admin_user_id');
+        return Boolean(adminToken && adminUserId);
+    }
+
     canActivate(route: ActivatedRouteSnapshot, state: RouterStateSnapshot): boolean {
         if (state.url.startsWith('/admin')) {
-            const adminToken = sessionStorage.getItem('admin_auth_token');
-            const adminUserId = sessionStorage.getItem('admin_user_id');
-
-            if (adminToken && adminUserId) {
+            if (this.hasAdminSession()) {
                 return true;
             }
 
@@ -22,7 +25,7 @@ export class AuthGuard implements CanActivate {
             return false;
         }
 
-        if (this.authService.isLoggedIn()) {
+        if (this.authService.isLoggedIn() || this.hasAdminSession()) {
             return true;
         } else {
             this.router.navigate(['/login']);
